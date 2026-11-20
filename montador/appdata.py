@@ -43,6 +43,7 @@ DEFAULTS = {
     "trello_token": "",
     "cores": {"erro": "Rose", "bastidores": "Mango", "conferir": "Violet"},
     "marcacoes": "auto",            # auto | skoopia | regras
+    "juntar_xml": True,             # um XML só com todas as aulas (uma importação no Premiere)
     "duracao_slide": 15,            # segundos de cada slide na tela quando a nota do slide não diz
     "libreoffice": None,            # caminho do soffice, se não estiver no lugar de sempre
     "ultima_pasta": None,

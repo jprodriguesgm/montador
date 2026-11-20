@@ -241,8 +241,8 @@ def _nome_arquivo(nome: str) -> str:
 
 
 def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: str, marcas: dict,
-           destino: str | Path, cfg: dict | None = None, modo: str = "auto") -> dict:
-    """Gera um XML por aula (por trecho, quando a aula está em mais de um vídeo)."""
+           destino: str | Path, cfg: dict | None = None, modo: str = "auto", juntar: bool = False) -> dict:
+    """Gera um XML por aula (por trecho, quando a aula está em mais de um vídeo) — ou um XML só com todas."""
     cfg = cfg or appdata.carregar()
     destino = Path(destino)
     destino.mkdir(parents=True, exist_ok=True)
@@ -307,7 +307,8 @@ def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: st
                     if not cues:
                         raise ErroMontagem("sem transcrição")
                     plano = planos[(a["n"], k)]
-                    saida = destino / f"{_nome_arquivo(nome)}.xml"
+                    saida = (tmp / "aulas" if juntar else destino) / f"{_nome_arquivo(nome)}.xml"
+                    saida.parent.mkdir(exist_ok=True)
                     log = _gerar(formato, insercao, v, cues, plano, dia["raiz"], a["n"], nome, saida, tmp,
                                  pptx[0] if pptx else None, (tr["ini"], tr["fim"]))
                     cont = pos_processar(saida, nome, cfg)
@@ -327,9 +328,18 @@ def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: st
                 if len(partes) > 1 and k == 1:
                     avisos.append(f"{a['nome']}: a aula está em {len(partes)} vídeos e saiu em {len(partes)} sequências "
                                   "— junte as partes na timeline")
+        unico = None
+        prontos = [Path(r["arquivo"]) for r in resultados if r["arquivo"]]
+        if juntar and prontos:
+            from .juntar import juntar as _juntar
+            unico = destino / f"{_nome_arquivo(dia['nome'])} - aulas.xml"
+            _juntar(prontos, unico, dia["nome"])
+            for r in resultados:
+                if r["arquivo"]:
+                    r["arquivo"] = str(unico)
     rel = _relatorio(dia, formato, insercao, usar_skoopia, resultados, avisos, destino)
     return {"resultados": resultados, "avisos": avisos, "relatorio": str(rel), "destino": str(destino),
-            "modo": "skoopia" if usar_skoopia else "regras"}
+            "modo": "skoopia" if usar_skoopia else "regras", "unico": str(unico) if unico else None}
 
 
 def _relatorio(dia, formato, insercao, usar_skoopia, resultados, avisos, destino: Path) -> Path:

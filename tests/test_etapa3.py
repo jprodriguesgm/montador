@@ -126,3 +126,27 @@ def test_montagem_com_slides_e_cartela(dia_teste, formato):
     for tr in seq.findall("media/video/track"):
         cs = sorted((int(x.findtext("start")), int(x.findtext("end"))) for x in tr.findall("clipitem"))
         assert all(a[1] <= b[0] for a, b in zip(cs, cs[1:]))
+
+
+@pytest.mark.parametrize("formato", ["TP", "TV", "SCREENCAST"])
+def test_um_xml_so_com_todas_as_aulas(dia_teste, formato):
+    import collections
+    d, falas, m, tmp = dia_teste
+    r = montagem.montar(d, falas, m["aulas"], formato, "nenhuma", {}, tmp / "junto", modo="regras", juntar=True)
+    assert r["unico"] and all(x["arquivo"] == r["unico"] for x in r["resultados"] if not x["erro"])
+    assert [p.suffix for p in (tmp / "junto").iterdir()].count(".xml") == 1
+    root = ET.parse(r["unico"]).getroot()
+    seqs = [s.findtext("name") for s in root.find("project/children").findall("sequence")]
+    assert seqs == [a["nome"] for a in m["aulas"]]
+    # cada mídia definida uma vez (vinheta, créditos, vídeos...) e toda referência vem depois da definição
+    defs = collections.Counter(f.findtext("pathurl") for f in root.iter("file") if len(f))
+    assert max(defs.values()) == 1
+    pos = {}
+    for i, e in enumerate(root.iter()):
+        if e.tag in ("file", "sequence") and e.get("id") and len(e):
+            pos[e.get("id")] = i
+    for i, e in enumerate(root.iter()):
+        if e.tag in ("file", "sequence") and e.get("id") and not len(e):
+            assert pos.get(e.get("id"), 10**9) < i
+    ids = [e.get("id") for e in root.iter("clipitem")]
+    assert len(ids) == len(set(ids))

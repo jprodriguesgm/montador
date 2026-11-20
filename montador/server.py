@@ -348,10 +348,13 @@ def acao_montar(corpo) -> dict:
     cfg = appdata.carregar()
     if corpo.get("destino"):
         appdata.salvar({"pasta_exportacao": corpo["destino"]})
+    if "juntar" in corpo:
+        appdata.salvar({"juntar_xml": bool(corpo["juntar"])})
     dd = dict(d, material=_material(d))
     try:
         return montagem.montar(dd, falas, m["aulas"], corpo.get("formato") or "TP", corpo.get("insercao") or "slide",
-                               marcas, destino, cfg, cfg.get("marcacoes") or "auto")
+                               marcas, destino, cfg, cfg.get("marcacoes") or "auto",
+                               juntar=bool(corpo["juntar"]) if "juntar" in corpo else bool(cfg.get("juntar_xml", True)))
     except OSError as e:
         raise ApiError(f"Não consegui gravar em {destino}: {e}")
 
