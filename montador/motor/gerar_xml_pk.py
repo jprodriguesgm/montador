@@ -43,7 +43,12 @@ def norm(t):
 
 
 def url_local(caminho):
-    return "file://localhost" + quote(unicodedata.normalize("NFD", caminho), safe="/")
+    p = str(caminho)
+    if p.startswith("\\\\"):                                    # Windows, pasta de rede (\\servidor\\pasta)
+        return "file:" + quote(p.replace("\\", "/"), safe="/:")
+    if re.match(r"^[A-Za-z]:[\\\\/]", p):                     # Windows (C:\\...)
+        return "file://localhost/" + quote(p.replace("\\", "/"), safe="/:")
+    return "file://localhost" + quote(unicodedata.normalize("NFD", p), safe="/")
 
 
 # ---------------------------------------------------------------- pptx (so biblioteca padrao)

@@ -52,8 +52,12 @@ def le_srt(p):
 
 
 def url_local(caminho):
-    p = unicodedata.normalize("NFD", caminho)
-    return "file://localhost" + quote(p, safe="/")
+    p = str(caminho)
+    if p.startswith("\\\\"):                                    # Windows, pasta de rede (\\servidor\\pasta)
+        return "file:" + quote(p.replace("\\", "/"), safe="/:")
+    if re.match(r"^[A-Za-z]:[\\\\/]", p):                     # Windows (C:\\...)
+        return "file://localhost/" + quote(p.replace("\\", "/"), safe="/:")
+    return "file://localhost" + quote(unicodedata.normalize("NFD", p), safe="/")
 
 
 # ------------------------------------------------------------------ planejamento

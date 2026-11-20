@@ -171,7 +171,12 @@ _CLASSES = {"ERRO": ("erro", "ERRO"), "BASTIDORES": ("bastidores", "BASTIDORES")
 
 
 def _url(caminho: str) -> str:
-    return "file://localhost" + quote(unicodedata.normalize("NFD", caminho), safe="/")
+    p = str(caminho)
+    if p.startswith("\\\\"):                                    # Windows, pasta de rede (\\servidor\\pasta)
+        return "file:" + quote(p.replace("\\", "/"), safe="/:")
+    if re.match(r"^[A-Za-z]:[\\\\/]", p):                     # Windows (C:\\...)
+        return "file://localhost/" + quote(p.replace("\\", "/"), safe="/:")
+    return "file://localhost" + quote(unicodedata.normalize("NFD", p), safe="/")
 
 
 EFEITOS_FORA = {"lumetri", "gaussian blur"}

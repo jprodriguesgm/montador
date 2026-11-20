@@ -140,7 +140,12 @@ def duracoes(itens: list[dict], t1: float, padrao: float = DURACAO_PADRAO) -> li
 # ------------------------------------------------------------------ timeline
 
 def _url(caminho: str) -> str:
-    return "file://localhost" + quote(unicodedata.normalize("NFD", caminho), safe="/")
+    p = str(caminho)
+    if p.startswith("\\\\"):                                    # Windows, pasta de rede (\\servidor\\pasta)
+        return "file:" + quote(p.replace("\\", "/"), safe="/:")
+    if re.match(r"^[A-Za-z]:[\\\\/]", p):                     # Windows (C:\\...)
+        return "file://localhost/" + quote(p.replace("\\", "/"), safe="/:")
+    return "file://localhost" + quote(unicodedata.normalize("NFD", p), safe="/")
 
 
 def _molde_slide():
