@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Montador</title>
+<link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+<main class="janela">
+  <header class="topo">
+    <span class="luzes" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span class="titulo">Montador <small id="versao"></small></span>
+    <button class="icone" id="abrirConfig" title="Configurações" aria-label="Configurações">⚙︎</button>
+  </header>
+
+  <div id="avisoConfig" class="faixa-aviso hidden">
+    Falta apontar os arquivos da vinheta, brasão e fundos neste computador.
+    <button class="btn pequeno" id="avisoConfigBtn">Configurar</button>
+  </div>
+
+  <section class="caixa">
+    <div class="rotulo">1. Pasta do dia</div>
+    <div class="linha">
+      <input class="campo" id="caminhoDia" placeholder="/Volumes/SSD Mac/PUC/26_640 Professor/2026 10 08" spellcheck="false">
+      <button class="btn" id="escolherDia">Escolher pasta</button>
+    </div>
+    <div class="pilulas" id="pilulasDia"></div>
+    <div class="avisos" id="avisosDia"></div>
+  </section>
+
+  <section class="caixa hidden" id="caixaCartao">
+    <div class="rotulo">2. Cartão da gravação</div>
+    <div id="resumoCartao" class="resumo"></div>
+    <details id="colarCartao">
+      <summary>Colar o texto do cartão</summary>
+      <p class="dica">Cole o texto do cartão do Planner/Trello, ou só a lista de títulos (um por linha).</p>
+      <textarea class="campo area" id="textoCartao" rows="7" spellcheck="false"></textarea>
+      <button class="btn pequeno" id="usarCartao">Usar este texto</button>
+    </details>
+  </section>
+
+  <section class="caixa hidden" id="caixaFormato">
+    <div class="rotulo">3. Formato</div>
+    <div class="linha">
+      <select class="campo" id="formato">
+        <option value="TP">TP</option><option value="TV">TV</option><option value="SCREENCAST">Screencast</option>
+      </select>
+      <select class="campo" id="insercao">
+        <option value="slide">Slide</option><option value="palavra">Palavra-chave</option>
+        <option value="ambas">Slide e palavra-chave</option><option value="editor">A critério do editor</option>
+        <option value="nenhuma">Sem inserção</option>
+      </select>
+    </div>
+    <div class="dica" id="dicaFormato"></div>
+  </section>
+
+  <section class="caixa hidden" id="caixaSkoopia">
+    <div class="rotulo">4. Marcações</div>
+    <div class="soltar">Os SRTs de cortes e inserções da Skoopia entram aqui na etapa 2. Sem eles, o app usa as regras do Fluxo NPD (sem IA).</div>
+  </section>
+
+  <section class="caixa hidden" id="caixaMaterial">
+    <div class="rotulo">5. Material de inserção</div>
+    <div class="pilulas" id="pilulasMaterial"></div>
+  </section>
+
+  <section class="caixa hidden" id="caixaMapa">
+    <div class="rotulo">6. Mapa do dia <span class="dica-inline">clique num trecho para trocar a aula, descartar ou dividir</span></div>
+    <div id="mapa"></div>
+    <div class="avisos" id="avisosMapa"></div>
+    <div id="aulas"></div>
+  </section>
+
+  <footer class="rodape hidden" id="rodape">
+    <button class="btn principal" id="montar">Montar sequências</button>
+  </footer>
+</main>
+
+<!-- trecho do mapa -->
+<div class="fundo hidden" id="modalTrecho">
+  <div class="modal pequeno">
+    <h3 id="trechoTitulo">Trecho</h3>
+    <div class="dica" id="trechoInfo"></div>
+    <label class="rotulo" for="trechoAula">Pertence a</label>
+    <select class="campo" id="trechoAula"></select>
+    <label class="rotulo" for="trechoDividir">Dividir este trecho em (mm:ss)</label>
+    <div class="linha"><input class="campo" id="trechoDividir" placeholder="12:30"><button class="btn" id="trechoDividirBtn">Dividir</button></div>
+    <div class="acoes"><button class="btn" id="trechoFechar">Cancelar</button><button class="btn principal" id="trechoOk">Aplicar</button></div>
+  </div>
+</div>
+
+<!-- configurações -->
+<div class="fundo hidden" id="modalConfig">
+  <div class="modal">
+    <h3>Configurações deste computador</h3>
+    <div class="rotulo">Arquivos dos projetos</div>
+    <p class="dica">Aponte um arquivo e o app procura os outros na mesma estrutura de pastas, como o Link Media do Premiere.</p>
+    <div id="listaAssets"></div>
+    <div class="rotulo">Pasta das gravações</div>
+    <div class="linha"><input class="campo" id="cfgGravacoes" spellcheck="false"><button class="btn" id="cfgGravacoesBtn">Escolher</button></div>
+    <div class="rotulo">Cores das marcações</div>
+    <div class="grade3">
+      <label>Erro <select class="campo" id="corErro"></select></label>
+      <label>Bastidores <select class="campo" id="corBastidores"></select></label>
+      <label>A conferir <select class="campo" id="corConferir"></select></label>
+    </div>
+    <div class="rotulo">Marcações</div>
+    <select class="campo" id="cfgMarcacoes">
+      <option value="auto">Automático (Skoopia se houver SRT, senão regras)</option>
+      <option value="skoopia">Sempre Skoopia</option>
+      <option value="regras">Sempre sem IA (regras do Fluxo NPD)</option>
+    </select>
+    <div class="acoes"><button class="btn principal" id="fecharConfig">Fechar</button></div>
+  </div>
+</div>
+
+<!-- navegador de pastas do app (Windows, ou quando a janela do sistema não abre) -->
+<div class="fundo hidden" id="modalNav">
+  <div class="modal">
+    <h3 id="navTitulo">Escolher</h3>
+    <div class="linha"><select class="campo" id="navRaizes"></select><button class="btn" id="navAcima">Pasta acima</button></div>
+    <div class="dica mono" id="navCaminho"></div>
+    <div class="lista" id="navLista"></div>
+    <div class="acoes"><button class="btn" id="navCancelar">Cancelar</button><button class="btn principal" id="navEscolher">Escolher esta pasta</button></div>
+  </div>
+</div>
+
+<div class="aviso-flutuante hidden" id="toast"></div>
+<script src="/ui/app.js"></script>
+</body>
+</html>

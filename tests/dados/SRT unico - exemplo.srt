@@ -1,0 +1,119 @@
+1
+00:00:00,000 --> 00:00:01,000
+[ARQUIVO: 2026-10-08 13-16-38]
+
+2
+00:00:02,000 --> 00:00:12,620
+Olá, estamos começando aqui a aula 17 no tema 2.5 e vamos falar agora de plataformas Enterprise, focando aqui em New Relic e Datadog.
+
+3
+00:01:00,000 --> 00:01:01,000
+[ARQUIVO: 2026-10-08 13-17-17]
+
+4
+00:01:25,160 --> 00:01:26,360
+Olá,
+
+5
+00:01:29,820 --> 00:01:37,720
+vamos falar das plataformas comerciais de Usando como referência duas das mais adotadas do mercado, New Relic e Datadog.
+
+6
+00:01:39,020 --> 00:01:43,760
+Aviso de postura, porque isso é importante numa disciplina aqui de pós-graduação.
+
+7
+00:01:44,120 --> 00:01:47,200
+Eu não estou recomendando e nem vou recomendar nenhum fornecedor.
+
+8
+00:13:08,230 --> 00:13:16,950
+No próximo tema, vamos a essas plataformas, fazem o que essas plataformas fazem de inteligência artificial em cima desses dados comentados.
+
+9
+00:13:17,510 --> 00:13:18,530
+Vejo vocês lá.
+
+10
+00:14:00,000 --> 00:14:01,000
+[ARQUIVO: 2026-10-08 13-29-42]
+
+11
+00:14:19,700 --> 00:14:25,440
+Olá, chegamos ao tema que fecha o ciclo da disciplina até então.
+
+12
+00:14:25,440 --> 00:14:32,520
+Na unidade 1, a gente estudou os conceitos de análise automatizada e da inteligência artificial nas operações.
+
+13
+00:14:32,820 --> 00:14:37,080
+Nas aulas anteriores dessa unidade, a fundação dos dados de telemetria.
+
+14
+00:14:37,420 --> 00:14:48,140
+Agora vamos ver onde essas duas coisas se juntam, se encontram, os recursos de inteligência artificial que já estão embutidos e embarcados nas plataformas comerciais.
+
+15
+00:22:56,200 --> 00:23:02,800
+Na próxima aula fechamos esse tema com a New Relic e com os critérios para avaliar esses recursos.
+
+16
+00:23:03,340 --> 00:23:04,320
+Vejo você lá.
+
+17
+00:24:00,000 --> 00:24:01,000
+[ARQUIVO: 2026-10-08 13-38-48]
+
+18
+00:24:04,080 --> 00:24:05,760
+Dá uma respiradinha e toma uma água aqui.
+
+19
+00:24:33,380 --> 00:24:34,960
+E aí
+
+20
+00:25:24,660 --> 00:25:42,020
+E aí Olá, vamos fechar o tema 2.6 falando da New Relic e depois montando um conjunto de critérios para avaliar recursos de inteligência artificial embarcados em qualquer plataforma.
+
+21
+00:25:42,840 --> 00:25:49,980
+Essa segunda parte é o que eu considero mais durável, produto muda de nome todo ano, critério de avaliação não.
+
+22
+00:35:11,060 --> 00:35:15,340
+As estratégias de coleta e enriquecimento dos dados em tempo real.
+
+23
+00:35:15,920 --> 00:35:16,860
+Vejo você lá.
+
+24
+00:36:00,000 --> 00:36:01,000
+[ARQUIVO: 2026-10-08 13-50-08]
+
+25
+00:36:07,740 --> 00:36:09,340
+E aí
+
+26
+00:37:00,260 --> 00:37:01,660
+Obrigado.
+
+27
+00:37:18,720 --> 00:37:21,840
+Olá, última aula da unidade 2.
+
+28
+00:37:22,180 --> 00:37:30,100
+Vamos tratar de um assunto que apareceu de passagem em quase todas as aulas anteriores e que agora merece uma atenção própria.
+
+29
+00:50:58,160 --> 00:51:05,800
+E a demonstração, para fechar a nossa disciplina, do agente escrito em Python com o MCP Server da New Relic.
+
+30
+00:51:06,720 --> 00:51:10,180
+Obrigado por ter chegado até aqui e nos vemos numa próxima unidade
