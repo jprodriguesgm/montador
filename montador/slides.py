@@ -30,6 +30,9 @@ class ErroSlides(Exception):
     pass
 
 
+_ULTIMO_ERRO: dict = {}
+
+
 # ------------------------------------------------------------------ texto
 
 def _textos_xml(xml: str) -> list[str]:
@@ -100,6 +103,8 @@ def soffice(cfg: dict | None = None) -> str | None:
         return p
     return _acha(["soffice", "libreoffice"], [
         "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        str(Path.home() / "Applications/LibreOffice.app/Contents/MacOS/soffice"),   # instalado sem senha de administrador
+        str(Path.home() / "Downloads/LibreOffice.app/Contents/MacOS/soffice"),
         r"C:\Program Files\LibreOffice\program\soffice.exe",
         r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
     ])
@@ -177,6 +182,7 @@ def _keynote(pptx: Path, tmp: Path) -> list[Path]:
     saida = tmp / "keynote"
     r = subprocess.run(["osascript", str(script), str(pptx), str(saida)], capture_output=True, text=True, timeout=900)
     if r.returncode != 0:
+        _ULTIMO_ERRO["keynote"] = (r.stderr or "").strip()[-200:]
         return []
     fs = [f for f in saida.iterdir() if f.suffix.lower() in _IMAGENS] if saida.is_dir() else []
     return sorted(fs, key=lambda f: int((re.search(r"(\d+)$", f.stem) or re.search(r"(\d+)", "0")).group(1)))
@@ -212,8 +218,11 @@ def converter(pptx: str | Path, cfg: dict | None = None) -> dict:
         if not paginas:
             if prontas:
                 return {"pasta": str(pasta_imagens(pptx)), "imagens": prontas, "metodo": "imagens prontas (antigas)"}
-            raise ErroSlides("não consegui converter os slides: instale o LibreOffice (libreoffice.org) "
-                             "ou exporte os slides como JPEG em Originais/" + pptx.stem)
+            kn = _ULTIMO_ERRO.pop("keynote", "")
+            raise ErroSlides("não consegui converter os slides: o LibreOffice não foi encontrado"
+                             + (f" e o Keynote recusou ({kn})" if kn else "")
+                             + ". Exporte os slides como JPEG em Originais/" + pptx.stem
+                             + " ou instale o LibreOffice (libreoffice.org) até sair a versão empacotada")
         pasta = pasta_imagens(pptx)
         pasta.mkdir(exist_ok=True)
         out = {}
