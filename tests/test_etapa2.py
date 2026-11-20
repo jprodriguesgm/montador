@@ -1,6 +1,5 @@
 """Etapa 2: montagem do XML (geradores do Fluxo NPD + Skoopia, nomes, cores, sem Lumetri, assets da máquina)."""
 import shutil
-import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -8,10 +7,10 @@ import pytest
 
 from montador import appdata, dia, mapa, montagem, skoopia, srt
 from montador.srt import Cue
+from mp4falso import mp4_falso
 
 DADOS = Path(__file__).parent / "dados"
 UNICO = DADOS / "SRT unico - exemplo.srt"
-pytestmark = pytest.mark.skipif(not shutil.which("ffmpeg"), reason="sem ffmpeg")
 
 
 @pytest.fixture
@@ -24,8 +23,7 @@ def dia_teste(tmp_path, monkeypatch):
     por = dia.dividir_unico(cues, [])
     for nome, cs in por.items():
         dur = int(cs[-1].fim + 5)
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"color=black:s=64x18:d={dur}:r=1",
-                        "-c:v", "mpeg4", str(foot / f"{nome}.mp4")], check=True)
+        mp4_falso(foot / f"{nome}.mp4", dur)
     shutil.copy(UNICO, foot / UNICO.name)
     d = dia.ler(raiz)
     falas = dia.transcricoes(d)
