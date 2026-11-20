@@ -295,3 +295,45 @@ def test_importar_pasta_e_procurar_por_nome(tmp_path):
     assert list(achados) == ["2026-10-08 13-17-17"]
     lidos = importar.ler_pasta(tmp_path)
     assert lidos[0]["nome"].startswith("2026-10-08 13-17-17")
+
+
+# ------------------------------------------------------------------ retorno da Skoopia
+
+from montador import skoopia
+
+
+def _dia_exemplo():
+    cues = srt.ler(UNICO)
+    tab = [{"video": n, "separador": t, "fala": t + 2} for n, t in srt.separadores(cues)]
+    falas = dia.dividir_unico(cues, tab)
+    videos = [{"nome": k, "duracao": v[-1].fim + 5} for k, v in falas.items()]
+    return videos, falas, tab
+
+
+def test_skoopia_do_dia_inteiro_e_dividida_pela_tabela():
+    videos, falas, tab = _dia_exemplo()
+    cortes = [Cue(1, 60.0, 61.0, "[BASTIDORES] marcador de arquivo"),
+              Cue(2, 2159.0, 2193.0, "[BASTIDORES] intervalo entre gravações ('E aí', 'Obrigado')")]
+    d = skoopia.ligar("cortes.srt", cortes, videos, falas, tab)
+    assert d["modo"] == "dia" and skoopia.tipo(cortes) == "cortes"
+    por = skoopia.distribuir(cortes, d, tab)
+    assert "2026-10-08 13-17-17" not in por                      # só o separador: não vira marcação
+    assert por["2026-10-08 13-50-08"][0].ini == 0.0
+
+
+def test_skoopia_de_um_video_pelas_falas_citadas():
+    videos, falas, tab = _dia_exemplo()
+    v = "2026-10-08 13-38-48"
+    c = falas[v][0]
+    cortes = [Cue(1, c.ini, c.fim, f"[BASTIDORES] instrução à professora ('{c.texto}')")]
+    d = skoopia.ligar("cortes da aula.srt", cortes, videos, falas, tab)
+    assert d == {"modo": "video", "video": v, "motivo": "pelas falas citadas"}
+
+
+def test_skoopia_sem_pista_fica_pendente_e_conta_por_aula():
+    videos, falas, tab = _dia_exemplo()
+    ins = [Cue(1, 5.0, 9.0, "Cartela sem relação\nTópico")]
+    d = skoopia.ligar("insercoes.srt", ins, videos, falas, tab)
+    assert d["modo"] == "pendente" and skoopia.tipo(ins) == "insercoes"
+    marcas = {"V": {"a.srt": [Cue(1, 10, 12, "[ERRO] x"), Cue(2, 50, 55, "Cartela")]}}
+    assert skoopia.contar(marcas, [{"video": "V", "ini": 0, "fim": 40}]) == {"erro": 1, "bastidores": 0, "insercao": 0}

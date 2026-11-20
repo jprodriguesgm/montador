@@ -63,12 +63,21 @@
 
   <section class="caixa hidden" id="caixaSkoopia">
     <div class="rotulo">4. Marcações</div>
-    <div class="soltar">Os SRTs de cortes e inserções da Skoopia entram aqui na etapa 2. Sem eles, o app usa as regras do Fluxo NPD (sem IA).</div>
+    <div class="soltar" id="soltarSkoopia">Arraste aqui os SRTs de cortes e inserções da Skoopia (quantos quiser)
+      <label class="btn pequeno">Escolher arquivos<input type="file" id="arqSkoopia" multiple accept=".srt" hidden></label></div>
+    <div id="listaSkoopia" class="lista-arq"></div>
+    <div class="dica" id="dicaSkoopia">Sem SRTs da Skoopia, o app usa as regras do Fluxo NPD (sem IA).</div>
   </section>
 
   <section class="caixa hidden" id="caixaMaterial">
     <div class="rotulo">5. Material de inserção</div>
     <div class="pilulas" id="pilulasMaterial"></div>
+    <div id="listaMaterial" class="lista-arq"></div>
+    <div class="linha importar">
+      <button class="btn pequeno" id="addMaterial">Adicionar arquivo</button>
+      <button class="btn pequeno" id="pastaMaterial">Escolher pasta do material</button>
+      <span class="dica">.pptx, roteiro .docx ou imagens</span>
+    </div>
   </section>
 
   <section class="caixa hidden" id="caixaMapa">

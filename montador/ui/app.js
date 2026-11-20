@@ -144,6 +144,27 @@ function mostrarDia(r) {
     m.pptx.length ? pilula(`${m.pptx.length} .pptx`) : "", m.docx.length ? pilula(`${m.docx.length} roteiro(s) .docx`) : "",
     m.imagens.length ? pilula(`${m.imagens.length} imagem(ns)`) : "",
   ].join(" ") || `<span class="dica">Nenhum material na pasta Originais.</span>`;
+  const manuais = new Set(m.manuais || []);
+  const todos = [...m.pptx, ...m.docx, ...m.imagens];
+  $("listaMaterial").innerHTML = todos.length > 12 ? "" : todos.map((p) => `
+    <div class="arq-linha"><span class="n" title="${esc(p)}">${esc(p.split(/[\\/]/).pop())}</span>
+      <span class="info">${manuais.has(p) ? "escolhido à mão" : "Originais"}</span>
+      ${manuais.has(p) ? `<button class="x" data-rm="${esc(p)}" title="Tirar">✕</button>` : "<span></span>"}</div>`).join("");
+  $("listaMaterial").querySelectorAll("[data-rm]").forEach((b) => (b.onclick = () => material({ remover: b.dataset.rm })));
+
+  const sk = d.skoopia || [];
+  const opVideos = d.videos.map((v) => `<option value="${esc(v.nome)}">${esc(v.nome)}</option>`).join("");
+  $("listaSkoopia").innerHTML = sk.map((a) => {
+    const destino = a.modo === "dia" ? "dia inteiro, dividido por vídeo" : a.modo === "video" ? a.video : "";
+    const info = a.modo === "pendente"
+      ? `<span class="info pend">${esc(a.motivo)} <select data-pend="${esc(a.nome)}"><option value="">escolher vídeo…</option>${opVideos}</select></span>`
+      : `<span class="info">${a.tipo === "cortes" ? "Cortes" : "Inserções"} · ${a.n} marcação(ões) · ${esc(destino)}</span>`;
+    return `<div class="arq-linha"><span class="n">${esc(a.nome)}</span>${info}<button class="x" data-rmsk="${esc(a.nome)}" title="Tirar">✕</button></div>`;
+  }).join("");
+  $("listaSkoopia").querySelectorAll("[data-pend]").forEach((sel) => (sel.onchange = () => sel.value && enviarSkoopia({ escolher: { nome: sel.dataset.pend, video: sel.value } })));
+  $("listaSkoopia").querySelectorAll("[data-rmsk]").forEach((b) => (b.onclick = () => enviarSkoopia({ remover: b.dataset.rmsk })));
+  $("dicaSkoopia").textContent = sk.length ? "As marcações entram na timeline na montagem (etapa 2). Contagem por aula no mapa do dia."
+    : "Sem SRTs da Skoopia, o app usa as regras do Fluxo NPD (sem IA).";
 
   mostrarMapa(r.mapa);
 }
@@ -187,6 +208,7 @@ function mostrarMapa(m) {
   $("aulas").innerHTML = `<div class="aulas-lista">${m.aulas.map((a) => `
     <div class="aula"><span class="cor" style="background:${corAula(a.n)}"></span><span class="num">${String(a.n).padStart(2, "0")}</span>
       <input class="campo" data-t="${a.n - 1}" value="${esc(a.titulo)}" placeholder="Título da aula ${a.n}">
+      ${a.marcas && (a.marcas.erro + a.marcas.bastidores + a.marcas.insercao) ? `<span class="marcas">Skoopia: ${a.marcas.erro} erro(s) · ${a.marcas.bastidores} bastidores · ${a.marcas.insercao} inserção(ões)</span>` : ""}
       ${a.conferir.map((x) => `<span class="motivo">${esc(x)}</span>`).join("")}</div>`).join("")}</div>`;
   $("aulas").querySelectorAll("[data-t]").forEach((el) => (el.onchange = () => { S.titulos[+el.dataset.t] = el.value.trim(); }));
 }
@@ -226,6 +248,14 @@ async function importarTranscricoes(corpo) {
   } catch (e) { toast(e.message); }
 }
 
+async function enviarSkoopia(corpo) {
+  try { mostrarDia(await api("/api/skoopia", corpo)); } catch (e) { toast(e.message); }
+}
+
+async function material(corpo) {
+  try { mostrarDia(await api("/api/material", corpo)); } catch (e) { toast(e.message); }
+}
+
 // ------------------------------------------------------------------ início
 
 async function iniciar() {
@@ -259,6 +289,23 @@ async function iniciar() {
     if (!S.dia) { toast("Escolha a pasta do dia primeiro."); return; }
     const fs = [...e.dataTransfer.files].filter((f) => /\.(srt|txt)$/i.test(f.name));
     if (fs.length) importarTranscricoes({ arquivos: await lerArquivos(fs) });
+  };
+  $("arqSkoopia").onchange = async (e) => { if (e.target.files.length) enviarSkoopia({ arquivos: await lerArquivos(e.target.files) }); e.target.value = ""; };
+  const zona = $("soltarSkoopia");
+  zona.ondragover = (e) => { e.preventDefault(); e.stopPropagation(); zona.classList.add("soltando"); };
+  zona.ondragleave = () => zona.classList.remove("soltando");
+  zona.ondrop = async (e) => {
+    e.preventDefault(); e.stopPropagation(); zona.classList.remove("soltando");
+    const fs = [...e.dataTransfer.files].filter((f) => /\.srt$/i.test(f.name));
+    if (fs.length) enviarSkoopia({ arquivos: await lerArquivos(fs) });
+  };
+  $("addMaterial").onclick = async () => {
+    const p = await escolher("arquivo", "Arquivo de inserção (.pptx, .docx ou imagem)", S.dia?.originais || S.dia?.raiz);
+    if (p) material({ adicionar: [p] });
+  };
+  $("pastaMaterial").onclick = async () => {
+    const p = await escolher("pasta", "Pasta com o material de inserção", S.dia?.originais || S.dia?.raiz);
+    if (p) material({ pasta: p });
   };
   $("arqCartao").onchange = async (e) => {
     const f = e.target.files[0]; e.target.value = "";

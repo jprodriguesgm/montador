@@ -157,7 +157,8 @@ def dividir_unico(cues: list[srt.Cue], tabela: list[dict]) -> dict[str, list[srt
             if srt.SEPARADOR.match(c.texto.strip()):
                 continue
             a, b = max(c.ini, r["separador"]), min(c.fim, fim_janela)
-            if b - a < 0.2:
+            la, lb = max(0.0, a - r["fala"]), max(0.0, b - r["fala"])
+            if lb - la < 0.2:                       # só o separador (antes da fala do vídeo): não conta
                 continue
-            out[r["video"]].append(srt.Cue(c.n, max(0.0, a - r["fala"]), max(0.0, b - r["fala"]), c.texto))
+            out[r["video"]].append(srt.Cue(c.n, la, lb, c.texto))
     return out

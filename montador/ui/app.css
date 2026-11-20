@@ -93,3 +93,14 @@ details summary{cursor:pointer;color:var(--texto2);font-size:13px;margin-top:4px
 .importar{margin-top:10px;flex-wrap:wrap}
 label.btn{display:inline-flex;align-items:center}
 .caixa.soltando{outline:2px dashed var(--azul);outline-offset:-4px}
+.lista-arq{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.arq-linha{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;font-size:12px;
+  background:var(--campo);border:1px solid var(--linha);border-radius:8px;padding:6px 8px}
+.arq-linha .n{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arq-linha .info{color:var(--fraco)}
+.arq-linha .info.pend{color:var(--alerta)}
+.arq-linha select{background:var(--campo);color:var(--texto);border:1px solid var(--linha2);border-radius:6px;font:inherit;padding:2px 4px}
+.x{background:none;border:none;color:var(--fraco);cursor:pointer;font-size:14px}.x:hover{color:var(--erro)}
+.soltar label.btn{margin-left:8px}
+.soltar.soltando{background:rgba(74,143,231,.12)}
+.aula .marcas{grid-column:3;color:var(--fraco);font-size:12px}

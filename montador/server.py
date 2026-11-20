@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import __version__, appdata, cartao, dia, dialogs, importar, mapa
+from . import __version__, appdata, cartao, dia, dialogs, importar, mapa, skoopia, srt
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 PORTA_PADRAO = 8767
@@ -36,6 +36,16 @@ class Estado:
         self.falas: dict = {}
         self.manuais: dict = {}          # transcrições importadas à mão (vídeo → falas), por pasta do dia
         self.raiz_manuais: str | None = None
+        self.tabela: list = []           # onde cada vídeo começa no SRT único (para dividir o que vem do dia inteiro)
+        self.marcas: dict = {}           # vídeo → {"arquivo.srt": [cues]} (retorno da Skoopia, já no tempo do vídeo)
+        self.skoopia: list = []          # arquivos importados: {nome, tipo, modo, video, motivo, n}
+        self.pendentes: dict = {}        # nome → cues (esperando o editor escolher o vídeo)
+        self.material_extra: list = []   # arquivos de inserção escolhidos à mão
+
+    def limpar_dia(self, raiz: str):
+        if self.raiz_manuais != raiz:
+            self.manuais, self.raiz_manuais, self.tabela = {}, raiz, []
+            self.marcas, self.skoopia, self.pendentes, self.material_extra = {}, [], {}, []
 
 
 ESTADO = Estado()
@@ -120,9 +130,13 @@ def acao_dia(corpo) -> dict:
             if v["nome"] in achados:
                 v["srt"] = achados[v["nome"]]
     falas = dia.transcricoes(d)
+    tabela = d.get("tabela") or []
+    if not tabela and d.get("srt_unico"):
+        tabela = [{"video": n, "separador": t, "fala": t + 2.0} for n, t in srt.separadores(srt.ler(d["srt_unico"]))]
     with ESTADO.lock:
-        if ESTADO.raiz_manuais != d["raiz"]:
-            ESTADO.manuais, ESTADO.raiz_manuais = {}, d["raiz"]
+        ESTADO.limpar_dia(d["raiz"])
+        if tabela:
+            ESTADO.tabela = tabela
         falas.update(ESTADO.manuais)
         ESTADO.dia, ESTADO.falas = d, falas
     appdata.salvar({"ultima_pasta": d["raiz"]})
@@ -143,12 +157,89 @@ def acao_transcricoes(corpo) -> dict:
     nomes = [v["nome"] for v in d["videos"]]
     r = importar.classificar(arquivos, nomes)
     with ESTADO.lock:
+        if r["tabela"]:
+            ESTADO.tabela = r["tabela"]
         ESTADO.manuais.update(r["por_video"])
         ESTADO.falas.update(r["por_video"])
         falas = ESTADO.falas
     out = _resultado(d, falas, (d.get("cartao") or {}).get("titulos") or [])
     out["importacao"] = {"videos": sorted(r["por_video"]), "unico": r["unico"], "skoopia": r["skoopia"],
                          "ignorados": r["ignorados"]}
+    return out
+
+
+def acao_skoopia(corpo) -> dict:
+    """SRTs de cortes e inserções da Skoopia (conteúdo vindo da janela)."""
+    with ESTADO.lock:
+        d, falas, tabela = ESTADO.dia, ESTADO.falas, ESTADO.tabela
+    if d is None:
+        raise ApiError("Escolha a pasta do dia primeiro.")
+    for a in corpo.get("arquivos") or []:
+        cues = srt.ler_texto(a.get("conteudo") or "")
+        if not cues:
+            continue
+        nome = a.get("nome") or "sem nome.srt"
+        dest = skoopia.ligar(nome, cues, d["videos"], falas, tabela)
+        _guardar_skoopia(nome, cues, dest, tabela)
+    if corpo.get("escolher"):                 # o editor escolheu o vídeo de um pendente
+        e = corpo["escolher"]
+        cues = ESTADO.pendentes.get(e.get("nome"))
+        if cues is not None and e.get("video"):
+            _guardar_skoopia(e["nome"], cues, {"modo": "video", "video": e["video"], "motivo": "escolhido pelo editor"}, tabela)
+    if corpo.get("remover"):
+        _remover_skoopia(corpo["remover"])
+    return _resultado(d, ESTADO.falas, (d.get("cartao") or {}).get("titulos") or [])
+
+
+def _remover_skoopia(nome: str):
+    with ESTADO.lock:
+        ESTADO.skoopia = [x for x in ESTADO.skoopia if x["nome"] != nome]
+        ESTADO.pendentes.pop(nome, None)
+        for m in ESTADO.marcas.values():
+            m.pop(nome, None)
+
+
+def _guardar_skoopia(nome: str, cues, dest: dict, tabela: list):
+    _remover_skoopia(nome)
+    with ESTADO.lock:
+        t = skoopia.tipo(cues)
+        if dest["modo"] == "pendente":
+            ESTADO.pendentes[nome] = cues
+        for video, lista in skoopia.distribuir(cues, dest, tabela).items():
+            ESTADO.marcas.setdefault(video, {})[nome] = lista
+        ESTADO.skoopia.append({"nome": nome, "tipo": t, "n": len(cues), **dest})
+
+
+def acao_material(corpo) -> dict:
+    """Material de inserção escolhido à mão (arquivos ou uma pasta)."""
+    with ESTADO.lock:
+        d = ESTADO.dia
+    if d is None:
+        raise ApiError("Escolha a pasta do dia primeiro.")
+    novos = list(corpo.get("adicionar") or [])
+    if corpo.get("pasta"):
+        p = Path(corpo["pasta"])
+        if not p.is_dir():
+            raise ApiError("Pasta não encontrada.")
+        novos += [str(q) for q in sorted(p.rglob("*")) if q.is_file() and not q.name.startswith(("~$", "."))
+                  and q.suffix.lower() in (".pptx", ".docx", ".jpg", ".jpeg", ".png")]
+    with ESTADO.lock:
+        for n in novos:
+            if Path(n).is_file() and n not in ESTADO.material_extra:
+                ESTADO.material_extra.append(n)
+        if corpo.get("remover"):
+            ESTADO.material_extra = [x for x in ESTADO.material_extra if x != corpo["remover"]]
+    return _resultado(d, ESTADO.falas, (d.get("cartao") or {}).get("titulos") or [])
+
+
+def _material(d: dict) -> dict:
+    out = {"pptx": list(d["material"]["pptx"]), "docx": list(d["material"]["docx"]),
+           "imagens": list(d["material"]["imagens"]), "manuais": list(ESTADO.material_extra)}
+    for p in ESTADO.material_extra:
+        ext = Path(p).suffix.lower()
+        chave = "pptx" if ext == ".pptx" else "docx" if ext == ".docx" else "imagens"
+        if p not in out[chave]:
+            out[chave].append(p)
     return out
 
 
@@ -159,7 +250,11 @@ def _resultado(d: dict, falas: dict, titulos_brutos: list[str]) -> dict:
     sep = cartao.separar_titulos(titulos_brutos, len(previa["aulas"]) or None) if titulos_brutos else \
         {"titulos": [], "separados": 0, "conferir": False, "motivo": ""}
     m = mapa.sugerir(d["videos"], falas, sep["titulos"])
-    d = dict(d, transcritos=sorted(k for k, v in falas.items() if v))
+    with ESTADO.lock:
+        for a in m["aulas"]:
+            a["marcas"] = skoopia.contar(ESTADO.marcas, a["trechos"])
+        d = dict(d, transcritos=sorted(k for k, v in falas.items() if v), material=_material(d),
+                 skoopia=list(ESTADO.skoopia), tem_tabela=bool(ESTADO.tabela))
     d["avisos"] = [a for a in d["avisos"] if not a.startswith("Sem transcrição")]
     faltam = [v["nome"] for v in d["videos"] if v["nome"] not in d["transcritos"]]
     if faltam:
@@ -188,7 +283,11 @@ def acao_mapa(corpo) -> dict:
     if corpo.get("dividir"):
         dv = corpo["dividir"]
         fx = mapa.dividir(fx, dv.get("video"), float(dv.get("tempo", 0)))
-    return {"faixas": fx, **mapa.montar(fx, corpo.get("titulos") or [])}
+    m = {"faixas": fx, **mapa.montar(fx, corpo.get("titulos") or [])}
+    with ESTADO.lock:
+        for a in m["aulas"]:
+            a["marcas"] = skoopia.contar(ESTADO.marcas, a["trechos"])
+    return m
 
 
 def acao_montar(_corpo) -> dict:
@@ -197,7 +296,8 @@ def acao_montar(_corpo) -> dict:
 
 GET = {"/api/estado": acao_estado, "/api/raizes": acao_raizes, "/api/listar": acao_listar}
 POST = {"/api/config": acao_config, "/api/escolher": acao_escolher, "/api/assets/apontar": acao_apontar_asset,
-        "/api/dia": acao_dia, "/api/cartao/texto": acao_cartao_texto, "/api/transcricoes": acao_transcricoes, "/api/mapa": acao_mapa,
+        "/api/dia": acao_dia, "/api/cartao/texto": acao_cartao_texto, "/api/transcricoes": acao_transcricoes,
+        "/api/skoopia": acao_skoopia, "/api/material": acao_material, "/api/mapa": acao_mapa,
         "/api/montar": acao_montar}
 
 

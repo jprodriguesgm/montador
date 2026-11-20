@@ -76,10 +76,13 @@ def classificar(arquivos: list[dict], videos: list[str]) -> dict:
         else:
             ignorados.append(nome)
     if unico is not None:
+        if not tabela:
+            tabela = [{"video": n, "separador": t, "fala": t + 2.0} for n, t in srt.separadores(unico)]
         for k, v in dia.dividir_unico(unico, tabela).items():
             if k in videos and k not in por_video:
                 por_video[k] = v
-    return {"por_video": por_video, "unico": unico is not None, "skoopia": skoopia, "ignorados": ignorados}
+    return {"por_video": por_video, "unico": unico is not None, "tabela": tabela, "skoopia": skoopia,
+            "ignorados": ignorados}
 
 
 def ler_pasta(pasta: str | Path, limite: int = 400) -> list[dict]:
