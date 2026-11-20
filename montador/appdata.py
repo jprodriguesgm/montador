@@ -36,6 +36,7 @@ CORES_PREMIERE = ["Violet", "Iris", "Caribbean", "Lavender", "Cerulean", "Forest
 
 DEFAULTS = {
     "pasta_gravacoes": None,        # onde ficam as pastas de curso/dia (ponto de partida para escolher)
+    "pasta_transcricoes": None,     # opcional: pasta onde ficam os .srt, quando não estão na Footage
     "assets": {},                   # id → caminho do arquivo
     "pasta_exportacao": None,       # última pasta onde os XMLs foram salvos (None = pasta Projeto do dia)
     "trello_chave": "",

@@ -265,3 +265,33 @@ def test_sigla_abre_titulo_depois_de_nome_proprio():
     r = cartao.separar_titulos(linhas, 2)
     assert r["titulos"] == ["Plataformas comerciais de observabilidade: New Relic e Datadog",
                             "IA embarcada nas plataformas comerciais"]
+
+
+# ------------------------------------------------------------------ importar transcrições à mão
+
+from montador import importar
+
+
+def test_importar_reconhece_cada_arquivo(tmp_path):
+    videos = ["2026-10-08 13-16-38", "2026-10-08 13-17-17", "2026-10-08 13-29-42", "2026-10-08 13-38-48",
+              "2026-10-08 13-50-08"]
+    arquivos = [
+        {"nome": "2026-10-08 13-16-38.srt", "conteudo": "1\n00:00:02,000 --> 00:00:04,000\nOlá, teste\n"},
+        {"nome": "cortes.srt", "conteudo": "1\n00:00:01,000 --> 00:00:02,000\n[ERRO] repetiu\n"},
+        {"nome": "anotacoes.txt", "conteudo": "nada aqui"},
+        {"nome": "SRT unico - Footage.srt", "conteudo": UNICO.read_text(encoding="utf-8")},
+    ]
+    r = importar.classificar(arquivos, videos)
+    assert r["unico"] and r["skoopia"] == ["cortes.srt"] and r["ignorados"] == ["anotacoes.txt"]
+    assert sorted(r["por_video"]) == sorted(videos)
+    assert r["por_video"]["2026-10-08 13-16-38"][0].texto == "Olá, teste"      # o arquivo do vídeo vale mais que o único
+
+
+def test_importar_pasta_e_procurar_por_nome(tmp_path):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "2026-10-08 13-17-17 - transcrição.srt").write_text(
+        "1\n00:00:01,000 --> 00:00:02,000\nOlá\n", encoding="utf-8")
+    achados = importar.procurar_por_nome(tmp_path, ["2026-10-08 13-17-17", "2026-10-08 13-29-42"])
+    assert list(achados) == ["2026-10-08 13-17-17"]
+    lidos = importar.ler_pasta(tmp_path)
+    assert lidos[0]["nome"].startswith("2026-10-08 13-17-17")

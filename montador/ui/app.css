@@ -90,3 +90,6 @@ details summary{cursor:pointer;color:var(--texto2);font-size:13px;margin-top:4px
 .lista .pasta::before{content:"📁 "}.lista .arq{color:var(--texto2)}
 .aviso-flutuante{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--caixa);border:1px solid rgba(255,255,255,.4);
   border-radius:12px;padding:10px 16px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:30;max-width:90vw}
+.importar{margin-top:10px;flex-wrap:wrap}
+label.btn{display:inline-flex;align-items:center}
+.caixa.soltando{outline:2px dashed var(--azul);outline-offset:-4px}

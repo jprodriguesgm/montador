@@ -82,6 +82,7 @@ function renderConfig() {
     $(id).onchange = () => salvarConfig({ cores: { [chave]: $(id).value } });
   }
   $("cfgMarcacoes").value = config.marcacoes;
+  $("cfgTrans").value = config.pasta_transcricoes || "";
   const faltam = assets.filter((a) => !a.ok).length;
   $("avisoConfig").classList.toggle("hidden", faltam === 0);
 }
@@ -114,16 +115,16 @@ function mostrarDia(r) {
   S.dia = r.dia; S.titulos = r.titulos.titulos || []; S.faixas = r.mapa.faixas;
   const d = r.dia, c = d.cartao;
   $("caminhoDia").value = d.raiz;
-  const nTrans = d.videos.filter((v) => v.srt).length;
+  const nTrans = (d.transcritos || []).length;
   $("pilulasDia").innerHTML = [
     pilula(`${d.videos.length} vídeo(s)`, d.videos.length ? "ok" : "alerta"),
-    nTrans === d.videos.length ? pilula("transcrições") : d.srt_unico ? pilula("transcrições pelo SRT único")
-      : pilula(`faltam ${d.videos.length - nTrans} transcrição(ões)`, "alerta"),
-    d.srt_unico ? pilula("SRT único") : pilula("sem SRT único", "alerta"),
+    nTrans >= d.videos.length ? pilula(`${nTrans} transcrição(ões)`) : pilula(`faltam ${d.videos.length - nTrans} transcrição(ões)`, "alerta"),
+    d.srt_unico ? pilula("SRT único") : "",
     c ? pilula("cartão") : pilula("sem cartão", "alerta"),
     d.editado ? pilula("já tem Projeto/Saída", "alerta") : "",
   ].join(" ");
   $("avisosDia").innerHTML = d.avisos.map((a) => `<div class="aviso">${esc(a)}</div>`).join("");
+  $("importarTrans").classList.remove("hidden");
 
   ["caixaCartao", "caixaFormato", "caixaSkoopia", "caixaMaterial", "caixaMapa", "rodape"].forEach((id) => $(id).classList.remove("hidden"));
   $("resumoCartao").innerHTML = c ? `
@@ -207,6 +208,24 @@ async function refazerMapa(extra = {}) {
   try { mostrarMapa(await api("/api/mapa", { faixas: S.faixas, titulos: S.titulos, ...extra })); } catch (e) { toast(e.message); }
 }
 
+// ------------------------------------------------------------------ importar à mão
+
+function lerArquivos(lista) {
+  return Promise.all([...lista].map((f) => f.text().then((conteudo) => ({ nome: f.name, conteudo }))));
+}
+
+async function importarTranscricoes(corpo) {
+  try {
+    const r = await api("/api/transcricoes", corpo);
+    mostrarDia(r);
+    const i = r.importacao, partes = [];
+    if (i.videos.length) partes.push(`${i.videos.length} transcrição(ões) ligadas aos vídeos${i.unico ? " (pelo SRT único)" : ""}`);
+    if (i.skoopia.length) partes.push(`${i.skoopia.length} SRT(s) da Skoopia: entram na etapa 2`);
+    if (i.ignorados.length) partes.push(`não reconheci: ${i.ignorados.slice(0, 4).join(", ")}${i.ignorados.length > 4 ? "…" : ""}`);
+    toast(partes.join(" · ") || "Nenhuma transcrição reconhecida.", 7000);
+  } catch (e) { toast(e.message); }
+}
+
 // ------------------------------------------------------------------ início
 
 async function iniciar() {
@@ -227,6 +246,28 @@ async function iniciar() {
     try { mostrarDia(await api("/api/cartao/texto", { texto: $("textoCartao").value })); toast("Cartão lido."); } catch (e) { toast(e.message); }
   };
   $("formato").onchange = atualizarFormato;
+  $("arqTrans").onchange = async (e) => { if (e.target.files.length) importarTranscricoes({ arquivos: await lerArquivos(e.target.files) }); e.target.value = ""; };
+  $("pastaTrans").onclick = async () => {
+    const p = await escolher("pasta", "Pasta com as transcrições (.srt)", S.estado.config.pasta_transcricoes || S.dia?.raiz);
+    if (p) importarTranscricoes({ pasta: p });
+  };
+  const caixa = $("caixaDia");
+  caixa.ondragover = (e) => { e.preventDefault(); caixa.classList.add("soltando"); };
+  caixa.ondragleave = () => caixa.classList.remove("soltando");
+  caixa.ondrop = async (e) => {
+    e.preventDefault(); caixa.classList.remove("soltando");
+    if (!S.dia) { toast("Escolha a pasta do dia primeiro."); return; }
+    const fs = [...e.dataTransfer.files].filter((f) => /\.(srt|txt)$/i.test(f.name));
+    if (fs.length) importarTranscricoes({ arquivos: await lerArquivos(fs) });
+  };
+  $("arqCartao").onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    $("textoCartao").value = await f.text();
+    try { mostrarDia(await api("/api/cartao/texto", { texto: $("textoCartao").value })); toast("Cartão lido."); } catch (err) { toast(err.message); }
+  };
+  $("cfgTransBtn").onclick = async () => { const p = await escolher("pasta", "Pasta das transcrições"); if (p) salvarConfig({ pasta_transcricoes: p }); };
+  $("cfgTrans").onchange = () => salvarConfig({ pasta_transcricoes: $("cfgTrans").value.trim() || null });
 
   $("trechoFechar").onclick = () => $("modalTrecho").classList.add("hidden");
   $("trechoOk").onclick = () => {

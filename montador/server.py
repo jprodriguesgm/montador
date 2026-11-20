@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import __version__, appdata, cartao, dia, dialogs, mapa
+from . import __version__, appdata, cartao, dia, dialogs, importar, mapa
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 PORTA_PADRAO = 8767
@@ -34,6 +34,8 @@ class Estado:
         self.ultimo_ping = time.time()
         self.dia: dict | None = None
         self.falas: dict = {}
+        self.manuais: dict = {}          # transcrições importadas à mão (vídeo → falas), por pasta do dia
+        self.raiz_manuais: str | None = None
 
 
 ESTADO = Estado()
@@ -110,12 +112,44 @@ def acao_dia(corpo) -> dict:
         d = dia.ler(caminho)
     except FileNotFoundError:
         raise ApiError("Pasta não encontrada.")
+    cfg = appdata.carregar()
+    faltam = [v["nome"] for v in d["videos"] if not v["srt"]]
+    if faltam and cfg.get("pasta_transcricoes") and Path(cfg["pasta_transcricoes"]).is_dir():
+        achados = importar.procurar_por_nome(cfg["pasta_transcricoes"], faltam)
+        for v in d["videos"]:
+            if v["nome"] in achados:
+                v["srt"] = achados[v["nome"]]
     falas = dia.transcricoes(d)
-    titulos_brutos = (d.get("cartao") or {}).get("titulos") or []
     with ESTADO.lock:
+        if ESTADO.raiz_manuais != d["raiz"]:
+            ESTADO.manuais, ESTADO.raiz_manuais = {}, d["raiz"]
+        falas.update(ESTADO.manuais)
         ESTADO.dia, ESTADO.falas = d, falas
     appdata.salvar({"ultima_pasta": d["raiz"]})
-    return _resultado(d, falas, titulos_brutos)
+    return _resultado(d, falas, (d.get("cartao") or {}).get("titulos") or [])
+
+
+def acao_transcricoes(corpo) -> dict:
+    """Transcrições importadas à mão: arquivos arrastados/escolhidos (conteúdo) ou uma pasta (caminho)."""
+    with ESTADO.lock:
+        d = ESTADO.dia
+    if d is None:
+        raise ApiError("Escolha a pasta do dia primeiro.")
+    arquivos = corpo.get("arquivos") or []
+    if corpo.get("pasta"):
+        if not Path(corpo["pasta"]).is_dir():
+            raise ApiError("Pasta não encontrada.")
+        arquivos = importar.ler_pasta(corpo["pasta"])
+    nomes = [v["nome"] for v in d["videos"]]
+    r = importar.classificar(arquivos, nomes)
+    with ESTADO.lock:
+        ESTADO.manuais.update(r["por_video"])
+        ESTADO.falas.update(r["por_video"])
+        falas = ESTADO.falas
+    out = _resultado(d, falas, (d.get("cartao") or {}).get("titulos") or [])
+    out["importacao"] = {"videos": sorted(r["por_video"]), "unico": r["unico"], "skoopia": r["skoopia"],
+                         "ignorados": r["ignorados"]}
+    return out
 
 
 def _resultado(d: dict, falas: dict, titulos_brutos: list[str]) -> dict:
@@ -125,6 +159,11 @@ def _resultado(d: dict, falas: dict, titulos_brutos: list[str]) -> dict:
     sep = cartao.separar_titulos(titulos_brutos, len(previa["aulas"]) or None) if titulos_brutos else \
         {"titulos": [], "separados": 0, "conferir": False, "motivo": ""}
     m = mapa.sugerir(d["videos"], falas, sep["titulos"])
+    d = dict(d, transcritos=sorted(k for k, v in falas.items() if v))
+    d["avisos"] = [a for a in d["avisos"] if not a.startswith("Sem transcrição")]
+    faltam = [v["nome"] for v in d["videos"] if v["nome"] not in d["transcritos"]]
+    if faltam:
+        d["avisos"].append("Sem transcrição: " + ", ".join(faltam) + ". Importe os .srt ou rode o transcribe na pasta.")
     return {"dia": d, "titulos": sep, "mapa": m}
 
 
@@ -158,7 +197,7 @@ def acao_montar(_corpo) -> dict:
 
 GET = {"/api/estado": acao_estado, "/api/raizes": acao_raizes, "/api/listar": acao_listar}
 POST = {"/api/config": acao_config, "/api/escolher": acao_escolher, "/api/assets/apontar": acao_apontar_asset,
-        "/api/dia": acao_dia, "/api/cartao/texto": acao_cartao_texto, "/api/mapa": acao_mapa,
+        "/api/dia": acao_dia, "/api/cartao/texto": acao_cartao_texto, "/api/transcricoes": acao_transcricoes, "/api/mapa": acao_mapa,
         "/api/montar": acao_montar}
 
 

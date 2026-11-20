@@ -19,7 +19,7 @@
     <button class="btn pequeno" id="avisoConfigBtn">Configurar</button>
   </div>
 
-  <section class="caixa">
+  <section class="caixa" id="caixaDia">
     <div class="rotulo">1. Pasta do dia</div>
     <div class="linha">
       <input class="campo" id="caminhoDia" placeholder="/Volumes/SSD Mac/PUC/26_640 Professor/2026 10 08" spellcheck="false">
@@ -27,6 +27,11 @@
     </div>
     <div class="pilulas" id="pilulasDia"></div>
     <div class="avisos" id="avisosDia"></div>
+    <div class="linha importar hidden" id="importarTrans">
+      <label class="btn pequeno">Importar transcrições (.srt)<input type="file" id="arqTrans" multiple accept=".srt,.txt" hidden></label>
+      <button class="btn pequeno" id="pastaTrans">Escolher pasta das transcrições</button>
+      <span class="dica">ou arraste os .srt para cá (de cada vídeo, ou o SRT único com a tabela)</span>
+    </div>
   </section>
 
   <section class="caixa hidden" id="caixaCartao">
@@ -36,7 +41,8 @@
       <summary>Colar o texto do cartão</summary>
       <p class="dica">Cole o texto do cartão do Planner/Trello, ou só a lista de títulos (um por linha).</p>
       <textarea class="campo area" id="textoCartao" rows="7" spellcheck="false"></textarea>
-      <button class="btn pequeno" id="usarCartao">Usar este texto</button>
+      <div class="linha"><button class="btn pequeno" id="usarCartao">Usar este texto</button>
+        <label class="btn pequeno">Escolher arquivo .txt do cartão<input type="file" id="arqCartao" accept=".txt" hidden></label></div>
     </details>
   </section>
 
@@ -99,6 +105,8 @@
     <div id="listaAssets"></div>
     <div class="rotulo">Pasta das gravações</div>
     <div class="linha"><input class="campo" id="cfgGravacoes" spellcheck="false"><button class="btn" id="cfgGravacoesBtn">Escolher</button></div>
+    <div class="rotulo">Pasta das transcrições <span class="dica">(opcional: quando os .srt não ficam na Footage, o app procura aqui pelo nome do vídeo)</span></div>
+    <div class="linha"><input class="campo" id="cfgTrans" spellcheck="false"><button class="btn" id="cfgTransBtn">Escolher</button></div>
     <div class="rotulo">Cores das marcações</div>
     <div class="grade3">
       <label>Erro <select class="campo" id="corErro"></select></label>
