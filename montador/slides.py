@@ -121,6 +121,26 @@ def _mac_spotlight() -> str | None:
     return None
 
 
+def versao(exe: str) -> str:
+    """Versão do LibreOffice sem abrir o programa (no Windows o soffice --version pode ficar esperando)."""
+    p = Path(exe)
+    for ini in (p.parent / "version.ini", p.parent.parent / "Resources" / "version.ini", p.parent / "versionrc"):
+        if ini.is_file():
+            m = re.search(r"^MsiProductVersion\s*=\s*(\S+)", ini.read_text(errors="replace"), re.M)
+            if m:
+                return m.group(1)
+    plist = p.parent.parent / "Info.plist"
+    if plist.is_file():
+        m = re.search(r"<key>CFBundleShortVersionString</key>\s*<string>([^<]+)</string>", plist.read_text(errors="replace"))
+        if m:
+            return m.group(1)
+    try:
+        r = subprocess.run([exe, "--headless", "--version"], capture_output=True, text=True, timeout=60)
+        return ((r.stdout or r.stderr).strip().splitlines() or ["?"])[0]
+    except (OSError, subprocess.SubprocessError):
+        return "?"
+
+
 def embutido() -> str | None:
     """LibreOffice que vai dentro do app empacotado (Mac: Resources/LibreOffice.app; Windows: pasta libreoffice)."""
     if not getattr(sys, "frozen", False):

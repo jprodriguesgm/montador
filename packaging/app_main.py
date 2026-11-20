@@ -32,7 +32,6 @@ def _log_em_arquivo():
 def diagnostico(pptx: str | None = None) -> int:
     """Confere o que vai dentro do app e, com um .pptx, converte os slides de verdade."""
     import platform
-    import subprocess
     import tempfile
     from pathlib import Path
     from montador import __version__, montagem, slides
@@ -40,8 +39,7 @@ def diagnostico(pptx: str | None = None) -> int:
     ok = True
     so = slides.embutido() or slides.soffice()
     if so:
-        r = subprocess.run([so, "--headless", "--version"], capture_output=True, text=True, timeout=300)
-        print(f"{'libreoffice':<12} ok   {((r.stdout or r.stderr).strip().splitlines() or ['?'])[0]}  ({so})"
+        print(f"{'libreoffice':<12} ok   {slides.versao(so)}  ({so})"
               + ("" if slides.embutido() else "  [não é o embutido]"))
         ok &= bool(slides.embutido()) or not getattr(sys, "frozen", False)
     else:

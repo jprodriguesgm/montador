@@ -151,8 +151,8 @@ def check() -> int:
     if IS_MAC or IS_WIN:
         so = soffice()
         if so:
-            r = subprocess.run([str(so), "--headless", "--version"], capture_output=True, text=True, timeout=180)
-            print(f"libreoffice  ok   {(r.stdout or r.stderr).strip().splitlines()[:1]}  ({so})")
+            v = (BIN / "libreoffice-versao.txt").read_text().strip() if (BIN / "libreoffice-versao.txt").is_file() else "?"
+            print(f"libreoffice  ok   {v}  ({so})")      # a conversão de verdade é testada no diagnóstico do app
         else:
             print("libreoffice  FALTA")
             ok = False
