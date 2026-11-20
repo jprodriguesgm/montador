@@ -43,11 +43,8 @@ def procurar_material(raiz: Path, originais: Path | None = None) -> tuple[dict, 
             continue
         if q.is_file() and not q.name.startswith(("~$", ".")):
             candidatos.append(q)
-    stems_pptx = {q.stem for q in candidatos if q.suffix.lower() == ".pptx"}
     for q in candidatos:
         ext = q.suffix.lower()
-        if ext in IMAGENS and q.parent.name in stems_pptx:
-            continue                              # slides já convertidos (pelo Montador ou pelo editor)
         if ext == ".pptx":
             material["pptx"].append(str(q))
         elif ext == ".docx":

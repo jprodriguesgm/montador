@@ -66,6 +66,47 @@ def todos_os_slides(lista_pptx: list[dict]) -> list[dict]:
     return out
 
 
+def slides_de_imagens(imagens: list[str], pptx_usados: list[str]) -> list[dict]:
+    """Imagens soltas no material (JPEG/PNG exportados pelo editor) viram "slides" para casar com as inserções.
+
+    O texto de cada imagem vem, nesta ordem:
+      1. do .pptx de mesmo nome da pasta (Originais/Aula 3/Aula 3.002.jpg -> slide 2 de Originais/Aula 3.pptx),
+         mesmo que o .pptx tenha sido tirado da lista;
+      2. do nome do arquivo (código C33 e as palavras do nome).
+    """
+    from . import slides as slides_mod
+    usados = {Path(p).resolve() for p in pptx_usados}
+    textos_pptx: dict[Path, dict[int, dict]] = {}
+    out = []
+    for img in imagens:
+        q = Path(img)
+        m = re.search(r"(\d+)$", q.stem)
+        n = int(m.group(1)) if m else None
+        irmao = next((c for c in (q.parent.parent / (q.parent.name + ".pptx"), q.parent / (re.sub(r"[.\s_-]*\d+$", "", q.stem) + ".pptx"))
+                      if c.is_file()), None)
+        if irmao is not None and irmao.resolve() in usados:
+            continue                                   # já entra pelo próprio .pptx
+        s = None
+        if irmao is not None and n is not None:
+            if irmao not in textos_pptx:
+                try:
+                    textos_pptx[irmao] = {x["n"]: x for x in slides_mod.ler(irmao)}
+                except slides_mod.ErroSlides:
+                    textos_pptx[irmao] = {}
+            s = textos_pptx[irmao].get(n)
+        if s is not None:
+            if s.get("referencias"):
+                continue
+            item = {**s}
+        else:
+            nome = re.sub(r"[_\-.]+", " ", q.stem).strip()
+            cod = re.search(r"\b(C\d{1,4})\b", nome, re.I)
+            item = {"n": n or 0, "titulo": nome, "textos": [nome], "codigo": cod.group(1).upper() if cod else None,
+                    "notas": "", "segundos": None, "referencias": False}
+        out.append({**item, "pptx": str(q), "imagem": str(q), "palavras": _palavras(" ".join(item["textos"]))})
+    return out
+
+
 # ------------------------------------------------------------------ casar
 
 def casar_skoopia(cues: list[Cue], slides: list[dict]) -> list[dict]:

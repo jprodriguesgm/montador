@@ -150,3 +150,18 @@ def test_um_xml_so_com_todas_as_aulas(dia_teste, formato):
             assert pos.get(e.get("id"), 10**9) < i
     ids = [e.get("id") for e in root.iter("clipitem")]
     assert len(ids) == len(set(ids))
+
+
+def test_imagens_prontas_sem_o_pptx_na_lista(tmp_path):
+    """O editor tirou o .pptx da lista e deixou só os JPEG exportados: o texto vem do .pptx de mesmo nome."""
+    d = tmp_path / "Aula.pptx"
+    _deck(d)
+    _imagens_prontas(d)
+    imgs = sorted(str(p) for p in (tmp_path / "Aula").glob("*.jpg"))
+    ss = insercoes.slides_de_imagens(imgs, [])
+    assert [(s["codigo"], s["n"]) for s in ss] == [("C10", 1), ("C11", 2)]      # referências ficam fora
+    assert insercoes.slides_de_imagens(imgs, [str(d)]) == []                      # com o .pptx na lista, entra por ele
+    solta = tmp_path / "C11 Árvores binárias.jpg"
+    solta.write_bytes((tmp_path / "Aula" / "Aula.002.jpg").read_bytes())
+    s = insercoes.slides_de_imagens([str(solta)], [])[0]
+    assert s["codigo"] == "C11" and s["imagem"] == str(solta)

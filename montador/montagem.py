@@ -278,7 +278,13 @@ def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: st
             except slides_mod.ErroSlides as e:
                 avisos.append(f"{Path(p).name}: {e}")
     todos_slides = insercoes.todos_os_slides(lista_pptx)
-    if com_slides and not pptx:
+    imagens = (dia.get("material") or {}).get("imagens") or []
+    if com_slides and imagens:
+        soltas = insercoes.slides_de_imagens(imagens, pptx)
+        if soltas:
+            todos_slides += soltas
+            avisos.append(f"Imagens prontas usadas como slides: {len(soltas)}")
+    if com_slides and not pptx and not imagens:
         avisos.append("Nenhum .pptx no material do dia: as inserções viraram marcadores CARTELA. "
                       "Adicione os slides na caixa Material e monte de novo.")
 
