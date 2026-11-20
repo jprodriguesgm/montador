@@ -121,7 +121,22 @@ def _mac_spotlight() -> str | None:
     return None
 
 
+def embutido() -> str | None:
+    """LibreOffice que vai dentro do app empacotado (Mac: Resources/LibreOffice.app; Windows: pasta libreoffice)."""
+    if not getattr(sys, "frozen", False):
+        return None
+    exe = Path(sys.executable).resolve()
+    for c in (exe.parent.parent / "Resources" / "LibreOffice.app" / "Contents" / "MacOS" / "soffice",
+              exe.parent / "libreoffice" / "program" / "soffice.exe",
+              exe.parent / "libreoffice" / "program" / "soffice"):
+        if c.is_file():
+            return str(c)
+    return None
+
+
 def soffice(cfg: dict | None = None) -> str | None:
+    if embutido():
+        return embutido()
     p = (cfg or {}).get("libreoffice")
     if p and _do_app(p):
         return _do_app(p)
@@ -186,6 +201,23 @@ def _jpeg(origem: Path, destino: Path):
 
 
 def _pdf_para_jpeg(pdf: Path, tmp: Path) -> list[Path]:
+    try:
+        import pypdfium2 as pdfium          # vai dentro do app (licença Apache/BSD)
+        out = []
+        doc = pdfium.PdfDocument(str(pdf))
+        try:
+            for i in range(len(doc)):
+                pg = doc[i]
+                img = pg.render(scale=LARG / pg.get_width()).to_pil()
+                f = tmp / f"p-{i + 1}.png"
+                img.save(f)
+                out.append(f)
+        finally:
+            doc.close()
+        if out:
+            return out
+    except ImportError:
+        pass
     exe = _acha(["pdftoppm"], ["/opt/homebrew/bin/pdftoppm", "/usr/local/bin/pdftoppm"])
     if exe:
         subprocess.run([exe, "-png", "-r", "200", str(pdf), str(tmp / "p")], capture_output=True, timeout=900)

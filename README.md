@@ -2,7 +2,9 @@
 
 Monta as sequências das videoaulas do Núcleo de Produção Digital (PUC Minas / IEC) no Premiere a partir da transcrição, das marcações da IA (ou das regras sem IA) e do material de inserção.
 
-O desenho completo está em [DESENHO.md](DESENHO.md).
+O desenho completo está em [DESENHO.md](DESENHO.md). Como instalar: [INSTALAR.md](INSTALAR.md).
+
+Baixar (versão oficial mais nova): [Mac](https://github.com/jprodriguesgm/montador/releases/latest/download/Montador-mac.zip) · [Windows](https://github.com/jprodriguesgm/montador/releases/latest/download/Montador-windows.zip). Versões de teste ficam em [Releases](https://github.com/jprodriguesgm/montador/releases).
 
 ## Estado
 
@@ -19,6 +21,7 @@ O desenho completo está em [DESENHO.md](DESENHO.md).
   - TP: o slide entra na V7 pelo tempo da nota do slide ("Exibir por 6 a 8 segundos" → 8 s) ou 15 s (Configurações), com marcador "SLIDE C33"; inserção sem slide vira marcador "CARTELA" com o texto;
   - TV: no ponto de inserção, a exibição (D) entra em tela cheia numa faixa nova por cima, com marcador "TELA CHEIA";
   - Screencast: só cortes.
+- **Etapa 4 (app):** ícone, app de Mac (Apple Silicon, macOS 11+) e Windows montado pelo GitHub Actions (aba Actions → "Montar o app" → Run workflow), com o LibreOffice e as fontes (Montserrat, Poppins, Carlito) dentro. Sem versão oficial = "Montagem N (teste)"; com versão (1.0.0) = oficial no link "latest". O ícone sai de `tools/fazer_icone.py`.
 - **Um XML só (padrão):** todas as aulas do dia num arquivo `<dia> - aulas.xml`; cada aula continua uma sequência, e vídeos, vinheta, créditos, fundos e slides entram uma vez só no projeto. Dá para desmarcar no Montar e voltar a um XML por aula.
 
 No modo sem IA, o Montador gera exatamente o mesmo XML que o Fluxo NPD (conferido com `tools/comparar_fluxo.py`), mudando só o nome da sequência, o nome do marcador e a remoção do Lumetri e do Desfoque gaussiano.

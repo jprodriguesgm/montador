@@ -263,7 +263,10 @@ except ImportError:      # python em modo isolado (-I) nao enxerga o Pillow inst
     import site; site.addsitedir(site.getusersitepackages())
 from PIL import Image, ImageDraw, ImageFont
 def _acha_fonte(nome):
-    for pasta in (os.path.expanduser("~/Library/Fonts/"), "/Library/Fonts/", "/System/Library/Fonts/Supplemental/", "/usr/share/fonts/truetype/google-fonts/"):
+    pastas = [os.environ.get("MONTADOR_FONTES", ""), os.path.expanduser("~/Library/Fonts/"), "/Library/Fonts/",
+              "/System/Library/Fonts/Supplemental/", "/usr/share/fonts/truetype/google-fonts/",
+              os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Windows\Fonts\"), os.path.expandvars(r"%WINDIR%\Fonts\")]
+    for pasta in [os.path.join(p, "") for p in pastas if p and "%" not in p]:
         if os.path.exists(pasta + nome):
             return pasta + nome
     sys.exit(f"Fonte {nome} não encontrada (instale a Poppins: Poppins-Light.ttf e Poppins-Bold.ttf em ~/Library/Fonts).")

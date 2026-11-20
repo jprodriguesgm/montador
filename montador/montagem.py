@@ -102,6 +102,13 @@ def plano_skoopia(cues: list[Cue], marcas: list[Cue], ini: float, fim: float) ->
 
 # ------------------------------------------------------------------ geradores
 
+def fontes() -> str | None:
+    """Pasta com as fontes que vão no app (Poppins, Montserrat, Carlito)."""
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+    p = base / "fontes"
+    return str(p) if p.is_dir() else None
+
+
 def _rodar(script: str, argv: list[str], env: dict) -> str:
     """Roda um gerador do Fluxo NPD dentro do processo (funciona também no app empacotado)."""
     saida = io.StringIO()
@@ -132,6 +139,8 @@ def _gerar(formato: str, insercao: str, video: dict, cues: list[Cue], plano: dic
     nome_mp4 = Path(video["arquivo"]).name
     dur = video.get("duracao") or (cues[-1].fim + 1 if cues else 0)
     env = {"ANINHADO": "1", "BINS": "1", "AULA": str(n)}
+    if fontes():
+        env["MONTADOR_FONTES"] = fontes()
     modelo = MOTOR / "modelos" / MODELOS["PALAVRA" if formato == "TP" and insercao == "palavra" and pptx else formato]
     if formato == "SCREENCAST":
         json.dump({**plano, "raw": nome_mp4, "dur": dur, "nome": nome_seq}, open(plano_p, "w", encoding="utf-8"), ensure_ascii=False)

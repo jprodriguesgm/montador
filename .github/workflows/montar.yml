@@ -1,0 +1,259 @@
+# Monta o Montador para Mac (Apple Silicon) e Windows e publica em "Releases".
+# Roda quando alguém aperta "Run workflow" (aba Actions) ou quando sobe uma etiqueta v1.2.3.
+#   - "Versão oficial" vazia → "Montagem N (teste)", pré-lançamento (as equipes não recebem).
+#   - "Versão oficial" = 1.2.3 (ou etiqueta v1.2.3) → versão oficial, entregue pelo link releases/latest.
+# O LibreOffice e as fontes ficam no cache entre uma montagem e outra.
+name: Montar o app
+
+on:
+  workflow_dispatch:
+    inputs:
+      sistemas:
+        description: "Montar para"
+        type: choice
+        options: [ambos, mac, windows]
+        default: ambos
+      versao:
+        description: "Versão oficial (ex.: 1.0.0). Deixe vazio para uma versão de teste."
+        type: string
+        default: ""
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: montar
+  cancel-in-progress: false
+
+jobs:
+  plano:
+    runs-on: ubuntu-24.04
+    outputs:
+      matriz: ${{ steps.m.outputs.matriz }}
+    steps:
+      - name: Conferir a versão oficial
+        env:
+          VERSAO: ${{ inputs.versao }}
+        run: |
+          if [ -n "$VERSAO" ] && ! [[ "$VERSAO" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error title=Versão::Use o formato 1.2.3 (só números e pontos), sem o v."
+            exit 1
+          fi
+          if [ -n "$VERSAO" ] && [ "${{ inputs.sistemas }}" != "ambos" ]; then
+            echo "::error title=Versão::Versão oficial sai sempre para Mac e Windows juntos (escolha ambos)."
+            exit 1
+          fi
+      - id: m
+        run: |
+          MAC='{"os":"macos-15","nome":"mac"}'; WIN='{"os":"windows-2022","nome":"windows"}'
+          case "${{ inputs.sistemas }}" in
+            mac) M="[$MAC]";; windows) M="[$WIN]";; *) M="[$MAC,$WIN]";;
+          esac
+          echo "matriz={\"include\":$M}" >> "$GITHUB_OUTPUT"
+
+  montar:
+    needs: plano
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plano.outputs.matriz) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: LibreOffice e fontes (cache)
+        id: deps
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            bin
+            fontes
+          key: deps-${{ matrix.nome }}-${{ hashFiles('packaging/build_deps.py') }}
+
+      - name: Baixar o LibreOffice e as fontes
+        if: steps.deps.outputs.cache-hit != 'true'
+        run: python packaging/build_deps.py
+
+      - name: Guardar no cache
+        if: steps.deps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            bin
+            fontes
+          key: deps-${{ matrix.nome }}-${{ hashFiles('packaging/build_deps.py') }}
+
+      - name: Conferir LibreOffice e fontes
+        run: python packaging/build_deps.py check
+
+      - name: Python do app
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          if [ "${{ matrix.nome }}" = "windows" ]; then
+            # antivírus: o "envelope" pronto do PyInstaller é o mesmo de muitos vírus; montado aqui ele fica diferente
+            PYINSTALLER_COMPILE_BOOTLOADER=1 python -m pip install --no-binary pyinstaller pyinstaller
+          fi
+          python -m pip install -r requirements.txt pyinstaller pytest python-pptx
+
+      - name: Versão oficial
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.versao != ''
+        shell: bash
+        env:
+          VERSAO: ${{ inputs.versao }}
+        run: |
+          VER="${VERSAO:-${GITHUB_REF#refs/tags/v}}"
+          python -c "import re,sys; p='montador/__init__.py'; s=open(p,encoding='utf-8').read(); open(p,'w',encoding='utf-8').write(re.sub(r'__version__ = \".*\"', '__version__ = \"'+sys.argv[1]+'\"', s))" "$VER"
+          python -c "import montador; print('versão', montador.__version__)"
+
+      - name: Testes
+        shell: bash
+        run: |
+          set +e
+          python -m pytest -q -rfE tests > pytest.txt 2>&1
+          rc=$?
+          tail -40 pytest.txt
+          if [ $rc -ne 0 ]; then
+            echo "::error title=Testes::$(grep -E '^(FAILED|ERROR)|Error:|assert |^E  ' pytest.txt | head -40 | tr '\n' '|' | cut -c1-3500)"
+          fi
+          exit $rc
+
+      - name: Slides de teste
+        shell: bash
+        run: |
+          mkdir -p build
+          python -c "import sys; sys.path.insert(0, 'tests'); from pathlib import Path; from test_etapa3 import _deck; _deck(Path('build/teste.pptx'))"
+
+      - name: Montar o app (PyInstaller)
+        run: pyinstaller --noconfirm packaging/montador.spec
+
+      - name: LibreOffice dentro do app (Mac)
+        if: matrix.nome == 'mac'
+        shell: bash
+        run: |
+          set +e
+          python packaging/check_macos_min.py "dist/Montador.app" 11.0 > minos.txt 2>&1
+          rc=$?
+          python packaging/check_macos_min.py "bin/LibreOffice.app" 11.0 > minos-lo.txt 2>&1
+          echo "LibreOffice: $(tail -1 minos-lo.txt)" >> minos.txt
+          cat minos.txt
+          [ $rc -eq 0 ] || { echo "::error title=macOS mínimo::$(tr '\n' '|' < minos.txt)"; exit 1; }
+          set -e
+          ditto "bin/LibreOffice.app" "dist/Montador.app/Contents/Resources/LibreOffice.app"
+          codesign --force --deep --sign - "dist/Montador.app"
+
+      - name: LibreOffice dentro do app (Windows)
+        if: matrix.nome == 'windows'
+        shell: bash
+        run: cp -r bin/libreoffice "dist/Montador/libreoffice"
+
+      - name: Diagnóstico do app montado (Mac)
+        if: matrix.nome == 'mac'
+        shell: bash
+        run: |
+          echo "### Mac" > diag-mac.txt
+          cat minos.txt >> diag-mac.txt
+          sw_vers | tr '\n' ' ' >> diag-mac.txt; echo >> diag-mac.txt
+          set +e
+          "dist/Montador.app/Contents/MacOS/Montador" diagnostico build/teste.pptx > d.txt 2>&1
+          rc=$?
+          cat d.txt | tee -a diag-mac.txt
+          codesign --verify --deep --verbose=1 "dist/Montador.app" 2>&1 | tee -a diag-mac.txt
+          du -sh "dist/Montador.app" | tee -a diag-mac.txt
+          echo "::notice title=Diagnóstico Mac::$(tr '\n' '|' < diag-mac.txt)"
+          exit $rc
+
+      - name: Diagnóstico do app montado (Windows)
+        if: matrix.nome == 'windows'
+        shell: bash
+        run: |
+          echo "### Windows" > diag-windows.txt
+          set +e
+          "dist/Montador/montador-terminal.exe" diagnostico build/teste.pptx > d.txt 2>&1
+          rc=$?
+          cat d.txt | tee -a diag-windows.txt
+          du -sh "dist/Montador" | tee -a diag-windows.txt
+          echo "::notice title=Diagnóstico Windows::$(tr '\n' '|' < diag-windows.txt)"
+          exit $rc
+
+      - name: Sem PowerShell no app (Windows)
+        if: matrix.nome == 'windows'
+        shell: bash
+        run: |
+          if grep -rniIE "[\"'](powershell|pwsh)|encodedcommand" montador --include=*.py; then
+            echo "::error title=Antivírus::o código do app chama o PowerShell"; exit 1
+          fi
+
+      - name: Compactar (Mac)
+        if: matrix.nome == 'mac'
+        run: |
+          # nome fixo: ".../releases/latest/download/Montador-mac.zip" sempre baixa a versão oficial mais nova
+          ditto -c -k --sequesterRsrc --keepParent "dist/Montador.app" "Montador-mac.zip"
+          ls -la *.zip | tee -a diag-mac.txt
+
+      - name: Compactar (Windows)
+        if: matrix.nome == 'windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/Montador" -DestinationPath "Montador-windows.zip"
+          Get-ChildItem *.zip | ForEach-Object { "$($_.Name) $([math]::Round($_.Length / 1MB)) MB" } | Tee-Object -Append -FilePath diag-windows.txt
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: app-${{ matrix.nome }}
+          path: |
+            *.zip
+            diag-*.txt
+          retention-days: 1
+          compression-level: 0
+
+  publicar:
+    needs: montar
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: pacotes
+          merge-multiple: true
+
+      - name: Publicar em Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSAO: ${{ inputs.versao }}
+        run: |
+          ls -la pacotes
+          if [ -n "$VERSAO" ] || [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            if [ -n "$VERSAO" ]; then TAG="v$VERSAO"; else TAG="${GITHUB_REF#refs/tags/}"; fi
+            TIT="Montador ${TAG#v}"; PRE="--latest"
+            AVISO="Versão oficial. Mac: baixe Montador-mac.zip · Windows: baixe Montador-windows.zip."
+          else
+            TAG="montagem-${GITHUB_RUN_NUMBER}"; TIT="Montagem ${GITHUB_RUN_NUMBER} (teste)"; PRE="--prerelease"
+            AVISO="Versão de TESTE, ainda não liberada para as equipes."
+          fi
+          {
+            echo "$AVISO"
+            echo
+            echo "Mac (Apple Silicon, macOS 11 ou mais novo) e Windows 10/11 (64 bits). LibreOffice e fontes já vão dentro. Como instalar: veja o [INSTALAR.md](https://github.com/$GITHUB_REPOSITORY/blob/main/INSTALAR.md)."
+            echo
+            echo "<details><summary>Diagnóstico da montagem</summary>"
+            echo
+            echo '```'
+            cat pacotes/diag-*.txt 2>/dev/null
+            echo '```'
+            echo "</details>"
+          } > notas.md
+          if ! gh release create "$TAG" pacotes/*.zip --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+                 --title "$TIT" $PRE --notes-file notas.md > saida.txt 2>&1; then
+            echo "::error title=Release::$(tail -c 1500 saida.txt | tr '\n' ' ')"
+            exit 1
+          fi
+          cat saida.txt
