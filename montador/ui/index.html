@@ -123,6 +123,7 @@
     <div class="acoes">
       <button class="btn" id="montarFechar">Fechar</button>
       <button class="btn hidden" id="montarAbrir">Abrir a pasta</button>
+      <button class="btn hidden" id="montarThumbs">Gerar thumbs</button>
       <button class="btn principal" id="montarIr">Montar</button>
     </div>
   </div>
@@ -153,6 +154,8 @@
     </select>
     <div class="rotulo">Slides</div>
     <div class="linha"><span class="dica" id="cfgLibre"></span><button class="btn pequeno" id="cfgLibreBtn">Procurar</button></div>
+    <div class="rotulo">Thumbs</div>
+    <div class="linha"><span class="dica" id="cfgThumb"></span><button class="btn pequeno" id="cfgThumbBtn">Procurar</button></div>
     <label class="dica">Tempo de cada slide na tela quando a nota do slide não diz (segundos)
       <input class="campo" type="number" min="2" max="120" step="1" id="cfgDurSlide" style="width:80px"></label>
     <div class="acoes"><button class="btn principal" id="fecharConfig">Fechar</button></div>
@@ -170,7 +173,34 @@
   </div>
 </div>
 
+<!-- thumbs (padrão do gerador de thumbnail da equipe) -->
+<div class="fundo hidden" id="modalThumbs">
+  <div class="modal largo">
+    <h3>Thumbs das aulas</h3>
+    <div id="thumbsSemModelo" class="hidden">
+      <div class="aviso" id="thumbsErro"></div>
+      <div class="acoes"><button class="btn principal" id="thumbsApontar">Apontar o gerador (index.html)</button></div>
+    </div>
+    <div id="thumbsCorpo" class="hidden">
+      <div class="linha thumbs-opcoes" id="thumbsOpcoes"></div>
+      <label class="rotulo" for="thumbsTitulos">Títulos (um por linha — "\\" corta à esquerda, "//" corta à direita, [[ ... ]] junta linhas numa thumb só)</label>
+      <textarea class="campo" id="thumbsTitulos" rows="4" spellcheck="false"></textarea>
+      <div id="thumbsLista" class="thumbs-lista"></div>
+      <div class="rotulo">Salvar as thumbs em (com o mesmo nome das sequências)</div>
+      <div class="linha"><input class="campo" id="thumbsPasta" spellcheck="false"><button class="btn" id="thumbsTrocar">Trocar pasta</button></div>
+      <div class="dica" id="thumbsFeito"></div>
+    </div>
+    <div class="acoes">
+      <button class="btn" id="thumbsFechar">Fechar</button>
+      <button class="btn hidden" id="thumbsAbrir">Abrir a pasta</button>
+      <button class="btn principal" id="thumbsSalvar">Confirmar e salvar</button>
+    </div>
+  </div>
+</div>
+
 <div class="aviso-flutuante hidden" id="toast"></div>
+<script src="/ui/vendor/html2canvas.min.js"></script>
 <script src="/ui/app.js"></script>
+<script src="/ui/thumbs.js"></script>
 </body>
 </html>

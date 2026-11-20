@@ -359,6 +359,28 @@ def acao_montar(corpo) -> dict:
         raise ApiError(f"Não consegui gravar em {destino}: {e}")
 
 
+def acao_thumbs_modelo(_corpo) -> dict:
+    from . import thumbs
+    try:
+        m = thumbs.ler_modelo(appdata.carregar().get("thumb_html"))
+    except thumbs.ErroThumb as e:
+        raise ApiError(str(e))
+    with ESTADO.lock:
+        d = ESTADO.dia
+    return {**m, "pasta": str(Path(d["raiz"]) / "Saída") if d else ""}
+
+
+def acao_thumbs_salvar(corpo) -> dict:
+    from . import thumbs
+    pasta = (corpo.get("pasta") or "").strip()
+    if not pasta:
+        raise ApiError("Escolha a pasta das thumbs.")
+    try:
+        return {"arquivos": thumbs.salvar(pasta, corpo.get("itens") or []), "pasta": pasta}
+    except OSError as e:
+        raise ApiError(f"Não consegui gravar em {pasta}: {e}")
+
+
 def acao_abrir_pasta(corpo) -> dict:
     import subprocess
     p = corpo.get("caminho")
@@ -377,7 +399,8 @@ GET = {"/api/estado": acao_estado, "/api/raizes": acao_raizes, "/api/listar": ac
 POST = {"/api/config": acao_config, "/api/escolher": acao_escolher, "/api/assets/apontar": acao_apontar_asset,
         "/api/dia": acao_dia, "/api/cartao/texto": acao_cartao_texto, "/api/transcricoes": acao_transcricoes,
         "/api/skoopia": acao_skoopia, "/api/material": acao_material, "/api/mapa": acao_mapa,
-        "/api/montar": acao_montar, "/api/abrir_pasta": acao_abrir_pasta}
+        "/api/montar": acao_montar, "/api/abrir_pasta": acao_abrir_pasta,
+        "/api/thumbs/modelo": acao_thumbs_modelo, "/api/thumbs/salvar": acao_thumbs_salvar}
 
 
 # ====================================================================== HTTP

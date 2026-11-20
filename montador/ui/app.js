@@ -86,6 +86,7 @@ function renderConfig() {
   $("cfgLibre").textContent = S.estado.libreoffice ? `LibreOffice: ${S.estado.libreoffice}`
     : S.estado.keynote ? "LibreOffice não encontrado — os slides serão convertidos pelo Keynote"
     : "LibreOffice não encontrado — instale (libreoffice.org) para converter os slides";
+  $("cfgThumb").textContent = config.thumb_html ? `Gerador: ${config.thumb_html}` : "Aponte o index.html do gerador de thumbnail (a fonte e as artes vêm dele)";
   $("cfgTrans").value = config.pasta_transcricoes || "";
   const faltam = assets.filter((a) => !a.ok).length;
   $("avisoConfig").classList.toggle("hidden", faltam === 0);
@@ -282,6 +283,7 @@ function abrirMontar() {
     + ($("formato").value === "TP" ? " Os slides entram na próxima versão (etapa 3)." : "");
   $("montarAntes").classList.remove("hidden"); $("montarDepois").classList.add("hidden");
   $("montarJuntar").checked = S.estado.config.juntar_xml !== false;
+  $("montarThumbs").classList.add("hidden");
   $("montarIr").classList.remove("hidden"); $("montarAbrir").classList.add("hidden");
   $("modalMontar").classList.remove("hidden");
 }
@@ -302,6 +304,7 @@ async function montarAgora() {
       + `<div class="dica">Relatório salvo junto: ${esc(r.relatorio.split(/[\\/]/).pop())}</div>`;
     $("montarAntes").classList.add("hidden"); $("montarDepois").classList.remove("hidden");
     $("montarIr").classList.add("hidden"); $("montarAbrir").classList.remove("hidden");
+    $("montarThumbs").classList.remove("hidden");
     $("montarAbrir").onclick = () => api("/api/abrir_pasta", { caminho: r.destino }).catch((e) => toast(e.message));
   } catch (e) { toast(e.message); }
   $("montarIr").textContent = "Montar";

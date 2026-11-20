@@ -22,6 +22,7 @@ Baixar (versão oficial mais nova): [Mac](https://github.com/jprodriguesgm/monta
   - TV: no ponto de inserção, a exibição (D) entra em tela cheia numa faixa nova por cima, com marcador "TELA CHEIA";
   - Screencast: só cortes.
 - **Etapa 4 (app):** ícone, app de Mac (Apple Silicon, macOS 11+) e Windows montado pelo GitHub Actions (aba Actions → "Montar o app" → Run workflow), com o LibreOffice e as fontes (Montserrat, Poppins, Carlito) dentro. Sem versão oficial = "Montagem N (teste)"; com versão (1.0.0) = oficial no link "latest". O ícone sai de `tools/fazer_icone.py`.
+- **Thumbs:** depois de montar, "Gerar thumbs" abre as thumbs das aulas no padrão do gerador da equipe (mesma fonte, artes Default/Libras, regra de tamanho da letra e barras `\\` e `//`, `[[ ]]`). Confirmando, salva PNG 1920x1080 em `<dia>/Saída` com o nome das sequências. A fonte (licenciada) e as artes vêm do `index.html` do gerador, apontado em Configurações → Thumbs; não vão para o repositório. Usa o html2canvas (MIT).
 - **Um XML só (padrão):** todas as aulas do dia num arquivo `<dia> - aulas.xml`; cada aula continua uma sequência, e vídeos, vinheta, créditos, fundos e slides entram uma vez só no projeto. Dá para desmarcar no Montar e voltar a um XML por aula.
 
 No modo sem IA, o Montador gera exatamente o mesmo XML que o Fluxo NPD (conferido com `tools/comparar_fluxo.py`), mudando só o nome da sequência, o nome do marcador e a remoção do Lumetri e do Desfoque gaussiano.

@@ -45,7 +45,8 @@ DEFAULTS = {
     "marcacoes": "auto",            # auto | skoopia | regras
     "juntar_xml": True,             # um XML só com todas as aulas (uma importação no Premiere)
     "duracao_slide": 15,            # segundos de cada slide na tela quando a nota do slide não diz
-    "libreoffice": None,            # caminho do soffice, se não estiver no lugar de sempre
+    "libreoffice": None,
+    "thumb_html": None,             # index.html do gerador de thumbnail da equipe (fonte e artes vêm dele)            # caminho do soffice, se não estiver no lugar de sempre
     "ultima_pasta": None,
 }
 
