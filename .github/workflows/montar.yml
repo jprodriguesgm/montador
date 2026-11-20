@@ -105,6 +105,15 @@ jobs:
           fi
           python -m pip install -r requirements.txt pyinstaller pytest python-pptx
 
+      # O pypdfium2 mais novo pede macOS 13; o Mac do trabalho pode ser mais antigo: pega o que roda desde o 11.
+      - name: pypdfium2 que roda desde o macOS 11 (Mac)
+        if: matrix.nome == 'mac'
+        run: |
+          # 4.30.0: a última com a biblioteca feita para o macOS 11 (a 5.x pede 12 ou 13)
+          python -m pip download "pypdfium2==4.30.0" --platform macosx_11_0_arm64 --only-binary=:all: --no-deps -d wheels11
+          python -m pip install --force-reinstall --no-deps wheels11/pypdfium2-*.whl
+          python -c "import pypdfium2, os; print('pypdfium2', pypdfium2.__file__)"
+
       - name: Versão oficial
         if: startsWith(github.ref, 'refs/tags/v') || inputs.versao != ''
         shell: bash
