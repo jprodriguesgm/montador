@@ -92,18 +92,30 @@ def ler(caminho: str | Path) -> dict:
     # material do professor e cartão
     material = {"pptx": [], "docx": [], "imagens": []}
     cartoes = []
-    if originais:
-        for q in sorted(originais.rglob("*"), key=lambda x: str(x).lower()):
-            if not q.is_file() or q.name.startswith(("~$", ".")):
-                continue
+    # procura na pasta do dia inteira (Originais, Material, solto na raiz...), menos onde ficam vídeos e saídas
+    fora = {"footage", "projeto", "saida", "saída", "editado", "nest"}
+    candidatos = []
+    for q in sorted(raiz.rglob("*"), key=lambda x: str(x).lower()):
+        rel = q.relative_to(raiz).parts
+        if any(x.lower() in fora or x.startswith(".") for x in rel[:-1]):
+            continue
+        if q.is_file() and not q.name.startswith(("~$", ".")):
+            candidatos.append(q)
+    stems_pptx = {q.stem for q in candidatos if q.suffix.lower() == ".pptx"}
+    if candidatos:
+        for q in candidatos:
             ext = q.suffix.lower()
+            if ext in IMAGENS and q.parent.name in stems_pptx:
+                continue                              # slides já convertidos pelo Montador
+            if ext in (".mp4", ".mov", ".srt", ".xml", ".prproj"):
+                continue
             if ext == ".pptx":
                 material["pptx"].append(str(q))
             elif ext == ".docx":
                 material["docx"].append(str(q))
             elif ext in IMAGENS:
                 material["imagens"].append(str(q))
-            elif ext == ".txt" and q.parent == originais:
+            elif ext == ".txt" and originais and q.parent == originais:
                 cartoes.append(q)
     for q in raiz.glob("*.txt"):
         cartoes.append(q)

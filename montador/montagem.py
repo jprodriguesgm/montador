@@ -278,6 +278,9 @@ def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: st
             except slides_mod.ErroSlides as e:
                 avisos.append(f"{Path(p).name}: {e}")
     todos_slides = insercoes.todos_os_slides(lista_pptx)
+    if com_slides and not pptx:
+        avisos.append("Nenhum .pptx no material do dia: as inserções viraram marcadores CARTELA. "
+                      "Adicione os slides na caixa Material e monte de novo.")
 
     # onde entra cada inserção, aula por aula (sem IA: cada slide fica só na aula em que mais combina)
     planos, itens_por = {}, {}
