@@ -318,7 +318,7 @@ async function iniciar() {
   $("cfgGravacoes").onchange = () => salvarConfig({ pasta_gravacoes: $("cfgGravacoes").value.trim() || null });
   $("cfgMarcacoes").onchange = () => salvarConfig({ marcacoes: $("cfgMarcacoes").value });
   $("cfgDurSlide").onchange = () => { const v = Math.max(2, Math.min(120, +$("cfgDurSlide").value || 15)); salvarConfig({ duracao_slide: v }); };
-  $("cfgLibreBtn").onclick = async () => { const p = await escolher("arquivo", "Onde está o LibreOffice (soffice)?"); if (p) salvarConfig({ libreoffice: p }); };
+  $("cfgLibreBtn").onclick = async () => { const p = await escolher("arquivo", "Escolha o LibreOffice (LibreOffice.app ou soffice)"); if (p) salvarConfig({ libreoffice: p }); };
 
   $("escolherDia").onclick = async () => abrirDia(await escolher("pasta", "Escolha a pasta do dia", S.estado.config.ultima_pasta || S.estado.config.pasta_gravacoes));
   $("caminhoDia").onkeydown = (e) => { if (e.key === "Enter") abrirDia($("caminhoDia").value.trim()); };

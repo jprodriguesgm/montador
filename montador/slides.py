@@ -97,17 +97,46 @@ def _acha(nomes: list[str], extras: list[str]) -> str | None:
     return next((e for e in extras if Path(e).exists()), None)
 
 
+def _do_app(p: str | Path) -> str | None:
+    """Aceita o próprio soffice ou o LibreOffice.app (escolhido no Finder)."""
+    p = Path(p)
+    if p.suffix.lower() == ".app":
+        p = p / "Contents" / "MacOS" / "soffice"
+    return str(p) if p.is_file() else None
+
+
+def _mac_spotlight() -> str | None:
+    """Mac: acha o LibreOffice.app onde ele estiver (outro disco, pasta Aplicativos de um SSD...)."""
+    if sys.platform != "darwin":
+        return None
+    try:
+        r = subprocess.run(["mdfind", "kMDItemCFBundleIdentifier == 'org.libreoffice.script'"],
+                           capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for ln in r.stdout.splitlines():
+        achado = _do_app(ln.strip())
+        if achado:
+            return achado
+    return None
+
+
 def soffice(cfg: dict | None = None) -> str | None:
     p = (cfg or {}).get("libreoffice")
-    if p and Path(p).exists():
-        return p
-    return _acha(["soffice", "libreoffice"], [
+    if p and _do_app(p):
+        return _do_app(p)
+    extras = [
         "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-        str(Path.home() / "Applications/LibreOffice.app/Contents/MacOS/soffice"),   # instalado sem senha de administrador
+        str(Path.home() / "Applications/LibreOffice.app/Contents/MacOS/soffice"),
         str(Path.home() / "Downloads/LibreOffice.app/Contents/MacOS/soffice"),
         r"C:\Program Files\LibreOffice\program\soffice.exe",
         r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-    ])
+    ]
+    if sys.platform == "darwin" and Path("/Volumes").is_dir():      # outros discos (ex.: SSD Mac/Aplicativos)
+        for vol in sorted(Path("/Volumes").iterdir()):
+            for pasta in ("Applications", "Aplicativos"):
+                extras.append(str(vol / pasta / "LibreOffice.app/Contents/MacOS/soffice"))
+    return _acha(["soffice", "libreoffice"], extras) or _mac_spotlight()
 
 
 def pasta_imagens(pptx: str | Path) -> Path:
