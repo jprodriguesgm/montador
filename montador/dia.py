@@ -29,6 +29,36 @@ def _filhos(p: Path, nome: str) -> Path | None:
     return None
 
 
+def procurar_material(raiz: Path, originais: Path | None = None) -> tuple[dict, list[Path]]:
+    """Material do professor na pasta do dia inteira (Originais, Material, solto na raiz...),
+    menos onde ficam vídeos e saídas. Devolve (material, cartões .txt de Originais)."""
+    raiz = Path(raiz)
+    material = {"pptx": [], "docx": [], "imagens": []}
+    cartoes = []
+    fora = {"footage", "projeto", "saida", "saída", "editado", "nest"}
+    candidatos = []
+    for q in sorted(raiz.rglob("*"), key=lambda x: str(x).lower()):
+        rel = q.relative_to(raiz).parts
+        if any(x.lower() in fora or x.startswith(".") for x in rel[:-1]):
+            continue
+        if q.is_file() and not q.name.startswith(("~$", ".")):
+            candidatos.append(q)
+    stems_pptx = {q.stem for q in candidatos if q.suffix.lower() == ".pptx"}
+    for q in candidatos:
+        ext = q.suffix.lower()
+        if ext in IMAGENS and q.parent.name in stems_pptx:
+            continue                              # slides já convertidos (pelo Montador ou pelo editor)
+        if ext == ".pptx":
+            material["pptx"].append(str(q))
+        elif ext == ".docx":
+            material["docx"].append(str(q))
+        elif ext in IMAGENS:
+            material["imagens"].append(str(q))
+        elif ext == ".txt" and originais and q.parent == Path(originais):
+            cartoes.append(q)
+    return material, cartoes
+
+
 def raiz_do_dia(caminho: str | Path) -> Path:
     p = Path(caminho).expanduser()
     if p.is_file():
@@ -90,33 +120,7 @@ def ler(caminho: str | Path) -> dict:
         avisos.append("Sem transcrição: " + ", ".join(sem_transcricao) + ". Rode o transcribe na pasta.")
 
     # material do professor e cartão
-    material = {"pptx": [], "docx": [], "imagens": []}
-    cartoes = []
-    # procura na pasta do dia inteira (Originais, Material, solto na raiz...), menos onde ficam vídeos e saídas
-    fora = {"footage", "projeto", "saida", "saída", "editado", "nest"}
-    candidatos = []
-    for q in sorted(raiz.rglob("*"), key=lambda x: str(x).lower()):
-        rel = q.relative_to(raiz).parts
-        if any(x.lower() in fora or x.startswith(".") for x in rel[:-1]):
-            continue
-        if q.is_file() and not q.name.startswith(("~$", ".")):
-            candidatos.append(q)
-    stems_pptx = {q.stem for q in candidatos if q.suffix.lower() == ".pptx"}
-    if candidatos:
-        for q in candidatos:
-            ext = q.suffix.lower()
-            if ext in IMAGENS and q.parent.name in stems_pptx:
-                continue                              # slides já convertidos pelo Montador
-            if ext in (".mp4", ".mov", ".srt", ".xml", ".prproj"):
-                continue
-            if ext == ".pptx":
-                material["pptx"].append(str(q))
-            elif ext == ".docx":
-                material["docx"].append(str(q))
-            elif ext in IMAGENS:
-                material["imagens"].append(str(q))
-            elif ext == ".txt" and originais and q.parent == originais:
-                cartoes.append(q)
+    material, cartoes = procurar_material(raiz, originais)
     for q in raiz.glob("*.txt"):
         cartoes.append(q)
 

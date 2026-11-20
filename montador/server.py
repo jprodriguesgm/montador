@@ -350,6 +350,10 @@ def acao_montar(corpo) -> dict:
         appdata.salvar({"pasta_exportacao": corpo["destino"]})
     if "juntar" in corpo:
         appdata.salvar({"juntar_xml": bool(corpo["juntar"])})
+    # o material é lido de novo agora: o editor pode ter posto slides na pasta depois de abrir o dia
+    novo, _ = dia.procurar_material(Path(d["raiz"]), d.get("originais") and Path(d["originais"]))
+    with ESTADO.lock:
+        d = ESTADO.dia = dict(d, material=novo)
     dd = dict(d, material=_material(d))
     try:
         return montagem.montar(dd, falas, m["aulas"], corpo.get("formato") or "TP", corpo.get("insercao") or "slide",
