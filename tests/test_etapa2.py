@@ -93,5 +93,9 @@ def test_plano_skoopia_junta_sobrepostos_e_acha_silencio():
             Cue(3, 30, 35, "Depois de um silêncio, continuamos."), Cue(4, 36, 40, "Vejo vocês lá.")]
     mk = [Cue(1, 6, 8, "[ERRO] x"), Cue(2, 7, 10, "[BASTIDORES] y"), Cue(3, 1, 2, "Cartela")]
     p = montagem.plano_skoopia(cues, mk, 0, 50)
-    assert p["trechos"][0][:2] == [6, 10] and "[ERRO]" in p["trechos"][0][3] and "[BASTIDORES]" in p["trechos"][0][3]
-    assert any("[SILÊNCIO]" in t[3] for t in p["trechos"])
+    erros = [t for t in p["trechos"] if t[2] == "erro"]
+    assert erros[0][:2] == [6, 10] and "[ERRO]" in erros[0][3] and "[BASTIDORES]" in erros[0][3]
+    assert any("[SILÊNCIO]" in t[3] for t in erros)
+    # a aula inteira fica dividida (TV e screencast precisam disso)
+    tr = p["trechos"]
+    assert tr[0][0] == p["T0"] and tr[-1][1] == p["T1"] and all(a[1] == b[0] for a, b in zip(tr, tr[1:]))

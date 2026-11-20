@@ -82,6 +82,10 @@ function renderConfig() {
     $(id).onchange = () => salvarConfig({ cores: { [chave]: $(id).value } });
   }
   $("cfgMarcacoes").value = config.marcacoes;
+  $("cfgDurSlide").value = config.duracao_slide || 15;
+  $("cfgLibre").textContent = S.estado.libreoffice ? `LibreOffice: ${S.estado.libreoffice}`
+    : S.estado.keynote ? "LibreOffice não encontrado — os slides serão convertidos pelo Keynote"
+    : "LibreOffice não encontrado — instale (libreoffice.org) para converter os slides";
   $("cfgTrans").value = config.pasta_transcricoes || "";
   const faltam = assets.filter((a) => !a.ok).length;
   $("avisoConfig").classList.toggle("hidden", faltam === 0);
@@ -289,7 +293,8 @@ async function montarAgora() {
     $("montarLista").innerHTML = r.resultados.map((x) => `
       <div class="arq-linha"><span class="n">${esc(x.nome)}.xml</span>
         <span class="info ${x.erro ? "pend" : ""}">${x.erro ? "não gerado: " + esc(x.erro)
-          : `${x.n_erro} erro(s) · ${x.n_bastidores} bastidores · ${x.n_silencio} silêncio(s)`}</span><span></span></div>`).join("");
+          : `${x.n_erro} erro(s) · ${x.n_bastidores} bastidores · ${x.n_silencio} silêncio(s)`
+            + (x.n_slides ? ` · ${x.n_slides} slide(s)` : "") + (x.n_cartelas ? ` · ${x.n_cartelas} cartela(s) a criar` : "") + (x.n_tela ? ` · ${x.n_tela} tela(s) cheia(s)` : "")}</span><span></span></div>`).join("");
     $("montarAvisos").innerHTML = r.avisos.map((a) => `<div class="aviso">${esc(a)}</div>`).join("")
       + `<div class="dica">Relatório salvo junto: ${esc(r.relatorio.split(/[\\/]/).pop())}</div>`;
     $("montarAntes").classList.add("hidden"); $("montarDepois").classList.remove("hidden");
@@ -312,6 +317,8 @@ async function iniciar() {
   $("cfgGravacoesBtn").onclick = async () => { const p = await escolher("pasta", "Pasta das gravações"); if (p) salvarConfig({ pasta_gravacoes: p }); };
   $("cfgGravacoes").onchange = () => salvarConfig({ pasta_gravacoes: $("cfgGravacoes").value.trim() || null });
   $("cfgMarcacoes").onchange = () => salvarConfig({ marcacoes: $("cfgMarcacoes").value });
+  $("cfgDurSlide").onchange = () => { const v = Math.max(2, Math.min(120, +$("cfgDurSlide").value || 15)); salvarConfig({ duracao_slide: v }); };
+  $("cfgLibreBtn").onclick = async () => { const p = await escolher("arquivo", "Onde está o LibreOffice (soffice)?"); if (p) salvarConfig({ libreoffice: p }); };
 
   $("escolherDia").onclick = async () => abrirDia(await escolher("pasta", "Escolha a pasta do dia", S.estado.config.ultima_pasta || S.estado.config.pasta_gravacoes));
   $("caminhoDia").onkeydown = (e) => { if (e.key === "Enter") abrirDia($("caminhoDia").value.trim()); };

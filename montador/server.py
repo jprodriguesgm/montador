@@ -61,8 +61,10 @@ ESTADO = Estado()
 
 def acao_estado(_q) -> dict:
     cfg = appdata.carregar()
+    from . import slides
     return {"versao": __version__, "config": cfg, "assets": appdata.estado_assets(cfg),
-            "cores_premiere": appdata.CORES_PREMIERE}
+            "cores_premiere": appdata.CORES_PREMIERE, "libreoffice": slides.soffice(cfg),
+            "keynote": sys.platform == "darwin" and Path("/Applications/Keynote.app").exists()}
 
 
 def acao_config(corpo) -> dict:

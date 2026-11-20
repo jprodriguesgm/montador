@@ -13,7 +13,12 @@ O desenho completo está em [DESENHO.md](DESENHO.md).
   - sequências "01 Título"; aula em dois vídeos sai em duas partes;
   - sem efeitos (Lumetri e Desfoque gaussiano saem); vinheta, brasão e fundos com os caminhos desta máquina;
   - relatório de uso ao lado dos XMLs.
-- **Etapa 3:** slides (.pptx → JPEG) e inserções.
+- **Etapa 3 (slides e inserções):**
+  - o .pptx do professor vira JPEG 1920x1080 (qualidade 95) em `Originais/<nome do pptx>/` — pelo LibreOffice, ou pelo Keynote no Mac sem LibreOffice; imagens já prontas nessa pasta são usadas como estão;
+  - com a Skoopia, cada inserção é ligada ao slide pelo código da cartela (C33) ou pelo título; sem IA, pelo assunto do slide na fala (para conferir);
+  - TP: o slide entra na V7 pelo tempo da nota do slide ("Exibir por 6 a 8 segundos" → 8 s) ou 15 s (Configurações), com marcador "SLIDE C33"; inserção sem slide vira marcador "CARTELA" com o texto;
+  - TV: no ponto de inserção, a exibição (D) entra em tela cheia numa faixa nova por cima, com marcador "TELA CHEIA";
+  - Screencast: só cortes.
 
 No modo sem IA, o Montador gera exatamente o mesmo XML que o Fluxo NPD (conferido com `tools/comparar_fluxo.py`), mudando só o nome da sequência, o nome do marcador e a remoção do Lumetri e do Desfoque gaussiano.
 

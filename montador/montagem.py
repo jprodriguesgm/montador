@@ -25,7 +25,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from urllib.parse import quote
 
-from . import __version__, appdata, skoopia, srt
+from . import insercoes, slides as slides_mod, __version__, appdata, skoopia, srt
 from .srt import Cue
 
 MOTOR = Path(__file__).resolve().parent / "motor"
@@ -85,7 +85,19 @@ def plano_skoopia(cues: list[Cue], marcas: list[Cue], ini: float, fim: float) ->
                 junto[-1][3] += " + " + m
         else:
             junto.append([a, b, t, m])
-    return {"T0": t0, "T1": t1, "trechos": junto, "fonte": "skoopia"}
+    # TV e screencast esperam a aula inteira dividida em trechos: o que não é marcação vira trecho "ok"
+    cheio, cursor = [], t0
+    for a, b, t, m in junto:
+        a, b = max(a, t0), min(b, t1)
+        if b - a < 0.05 or b <= cursor:
+            continue
+        if a - cursor > 0.05:
+            cheio.append([cursor, a, "ok", ""])
+        cheio.append([max(a, cursor), b, t, m])
+        cursor = b
+    if t1 - cursor > 0.05 or not cheio:
+        cheio.append([cursor, t1, "ok", ""])
+    return {"T0": t0, "T1": t1, "trechos": cheio, "fonte": "skoopia"}
 
 
 # ------------------------------------------------------------------ geradores
@@ -184,6 +196,15 @@ def pos_processar(arquivo: Path, nome_seq: str, cfg: dict) -> dict:
             if p:
                 u.text = _url(p)
 
+    # clipes da câmera (aninhados) com o nome da própria sequência aninhada (o modelo trazia o nome de outra gravação)
+    nomes_seq = {x.get("id"): x.findtext("name") for x in root.iter("sequence") if x.get("id") and x.findtext("name")}
+    for c in root.iter("clipitem"):
+        sq = c.find("sequence")
+        if sq is not None and c.find("name") is not None:
+            nm = sq.findtext("name") or nomes_seq.get(sq.get("id"))
+            if nm:
+                c.find("name").text = nm
+
     # tipo de cada marcação e cor dos trechos
     for seq in root.iter("sequence"):
         if seq.findtext("name") != nome_seq:
@@ -229,6 +250,48 @@ def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: st
     pptx = (dia.get("material") or {}).get("pptx") or []
     usar_skoopia = modo == "skoopia" or (modo == "auto" and any(marcas.values()))
     resultados, avisos = [], []
+    padrao = float(cfg.get("duracao_slide") or insercoes.DURACAO_PADRAO)
+
+    # slides do professor (TP e TV): texto de cada slide e imagens JPEG
+    com_slides = formato in ("TP", "TV") and insercao not in ("nenhuma", "palavra")
+    lista_pptx = []
+    if com_slides:
+        for p in pptx:
+            try:
+                conv = slides_mod.converter(p, cfg)
+                lista_pptx.append({"pptx": p, "slides": slides_mod.ler(p), "imagens": conv["imagens"]})
+                avisos.append(f"Slides de {Path(p).name}: {len(conv['imagens'])} imagem(ns) ({conv['metodo']})")
+            except slides_mod.ErroSlides as e:
+                avisos.append(f"{Path(p).name}: {e}")
+    todos_slides = insercoes.todos_os_slides(lista_pptx)
+
+    # onde entra cada inserção, aula por aula (sem IA: cada slide fica só na aula em que mais combina)
+    planos, itens_por = {}, {}
+    for a in aulas:
+        for k, tr in enumerate(a["trechos"], 1):
+            cues = falas.get(tr["video"]) or []
+            if not cues:
+                continue
+            mk = [c for lista in (marcas.get(tr["video"]) or {}).values() for c in lista]
+            plano = plano_skoopia(cues, mk, tr["ini"], tr["fim"]) if usar_skoopia else plano_regras(cues, tr["ini"], tr["fim"])
+            planos[(a["n"], k)] = plano
+            if not com_slides:
+                continue
+            if usar_skoopia:
+                its = insercoes.casar_skoopia([c for c in mk if plano["T0"] - 1 <= c.ini <= plano["T1"]], todos_slides)
+            else:
+                its = insercoes.casar_regras(cues, plano["T0"], plano["T1"], todos_slides)
+            itens_por[(a["n"], k)] = its
+    if com_slides and not usar_skoopia:
+        melhor = {}
+        for chave, its in itens_por.items():
+            for it in its:
+                sid = (it["slide"]["pptx"], it["slide"]["n"])
+                if sid not in melhor or it["nota"] > melhor[sid][1]["nota"]:
+                    melhor[sid] = (chave, it)
+        for chave in itens_por:
+            itens_por[chave] = [it for it in itens_por[chave]
+                                if melhor[(it["slide"]["pptx"], it["slide"]["n"])][1] is it]
     with tempfile.TemporaryDirectory(prefix="montador_") as t:
         tmp = Path(t)
         for a in aulas:
@@ -243,13 +306,18 @@ def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: st
                         raise ErroMontagem("vídeo não encontrado")
                     if not cues:
                         raise ErroMontagem("sem transcrição")
-                    mk = [c for lista in (marcas.get(tr["video"]) or {}).values() for c in lista]
-                    plano = plano_skoopia(cues, mk, tr["ini"], tr["fim"]) if usar_skoopia else \
-                        plano_regras(cues, tr["ini"], tr["fim"])
+                    plano = planos[(a["n"], k)]
                     saida = destino / f"{_nome_arquivo(nome)}.xml"
                     log = _gerar(formato, insercao, v, cues, plano, dia["raiz"], a["n"], nome, saida, tmp,
                                  pptx[0] if pptx else None, (tr["ini"], tr["fim"]))
                     cont = pos_processar(saida, nome, cfg)
+                    its = itens_por.get((a["n"], k)) or []
+                    if formato == "TV" and usar_skoopia:     # TV: a tela fica cheia o trecho todo que a Skoopia marcou
+                        for it in its:
+                            it["fim_tela"] = min(max(it["fim"], it["ini"] + 2.0), plano["T1"])
+                    else:
+                        its = insercoes.duracoes(its, plano["T1"], padrao)
+                    cont.update(insercoes.aplicar(saida, nome, its, formato))
                     item.update(arquivo=str(saida), fonte=plano["fonte"], T0=plano["T0"], T1=plano["T1"], **cont,
                                 log=log.strip().splitlines()[-1:] if log.strip() else [])
                 except ErroMontagem as e:
@@ -269,7 +337,7 @@ def _relatorio(dia, formato, insercao, usar_skoopia, resultados, avisos, destino
     agora = time.strftime("%Y-%m-%d %H%M")
     p = destino / f"Montador - relatório {agora}.txt"
     linhas = [f"Montador {__version__} · {agora}", f"Dia: {dia['curso']} / {dia['nome']}",
-              f"Formato: {formato}" + (f" · inserção: {insercao}" if formato == "TP" else ""),
+              f"Formato: {formato}" + (f" · inserção: {insercao}" if formato in ("TP", "TV") else ""),
               f"Marcações: {'Skoopia' if usar_skoopia else 'regras do Fluxo NPD (sem IA)'}", ""]
     for r in resultados:
         if r["erro"]:
@@ -277,6 +345,9 @@ def _relatorio(dia, formato, insercao, usar_skoopia, resultados, avisos, destino
             continue
         linhas.append(f"{r['nome']} · {r['video']} de {r['T0']:.1f} a {r['T1']:.1f} s · {r['n_erro']} erro(s), "
                       f"{r['n_bastidores']} bastidores, {r['n_silencio']} silêncio(s), {r['n_conferir']} a conferir"
+                      + (f" · {r.get('n_slides', 0)} slide(s)" if r.get("n_slides") else "")
+                      + (f" · {r['n_cartelas']} cartela(s) a criar" if r.get("n_cartelas") else "")
+                      + (f" · {r['n_tela']} tela(s) cheia(s)" if r.get("n_tela") else "")
                       + (f" · {r['efeitos_removidos']} efeito(s) removido(s)" if r["efeitos_removidos"] else ""))
     linhas += [""] + [f"Aviso: {a}" for a in avisos]
     p.write_text("\n".join(linhas) + "\n", encoding="utf-8")
