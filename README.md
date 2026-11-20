@@ -6,7 +6,16 @@ O desenho completo está em [DESENHO.md](DESENHO.md).
 
 ## Estado
 
-**Etapa 1 (base):** configurações deste computador (arquivos dos projetos, como o Link Media), leitura da pasta do dia e do cartão, títulos (inclusive grudados) e o mapa do dia com aulas, takes descartados e trechos. A montagem do XML chega na etapa 2.
+- **Etapa 1 (base):** configurações deste computador (arquivos dos projetos, como o Link Media), pasta do dia, cartão (títulos grudados), mapa do dia (aulas, takes descartados, trechos) e importação à mão de transcrições, SRTs da Skoopia e material.
+- **Etapa 2 (montagem):** um XML por aula para o Premiere 25, nos formatos TP, TP com palavra-chave, TV e Screencast. Usa os geradores do Fluxo NPD (pasta `montador/motor`), com:
+  - marcações da Skoopia (ERRO, BASTIDORES) ou as regras do Fluxo NPD (sem IA), mais SILÊNCIO detectado pelo app;
+  - cor de cada tipo de marcação pelas Configurações; nada é apagado;
+  - sequências "01 Título"; aula em dois vídeos sai em duas partes;
+  - sem Lumetri; vinheta, brasão e fundos com os caminhos desta máquina;
+  - relatório de uso ao lado dos XMLs.
+- **Etapa 3:** slides (.pptx → JPEG) e inserções.
+
+No modo sem IA, o Montador gera exatamente o mesmo XML que o Fluxo NPD (conferido com `tools/comparar_fluxo.py`), mudando só o nome da sequência, o nome do marcador e a remoção do Lumetri.
 
 ## Testar no Mac (antes do app empacotado)
 

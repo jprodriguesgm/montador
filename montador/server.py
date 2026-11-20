@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
+import sys
 import socket
 import threading
 import time
@@ -16,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import __version__, appdata, cartao, dia, dialogs, importar, mapa, skoopia, srt
+from . import __version__, appdata, cartao, dia, dialogs, importar, mapa, montagem, skoopia, srt
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 PORTA_PADRAO = 8767
@@ -290,15 +292,46 @@ def acao_mapa(corpo) -> dict:
     return m
 
 
-def acao_montar(_corpo) -> dict:
-    raise ApiError("A montagem das sequências chega na etapa 2. Por enquanto, confira o mapa do dia.", 501)
+def acao_montar(corpo) -> dict:
+    with ESTADO.lock:
+        d, falas, marcas = ESTADO.dia, dict(ESTADO.falas), {k: dict(v) for k, v in ESTADO.marcas.items()}
+    if d is None:
+        raise ApiError("Escolha a pasta do dia primeiro.")
+    titulos = corpo.get("titulos") or []
+    m = mapa.montar(corpo.get("faixas") or [], titulos)
+    if not m["aulas"]:
+        raise ApiError("Nenhuma aula no mapa do dia.")
+    destino = corpo.get("destino") or str(Path(d["raiz"]) / "Projeto")
+    cfg = appdata.carregar()
+    if corpo.get("destino"):
+        appdata.salvar({"pasta_exportacao": corpo["destino"]})
+    dd = dict(d, material=_material(d))
+    try:
+        return montagem.montar(dd, falas, m["aulas"], corpo.get("formato") or "TP", corpo.get("insercao") or "slide",
+                               marcas, destino, cfg, cfg.get("marcacoes") or "auto")
+    except OSError as e:
+        raise ApiError(f"Não consegui gravar em {destino}: {e}")
+
+
+def acao_abrir_pasta(corpo) -> dict:
+    import subprocess
+    p = corpo.get("caminho")
+    if not p or not Path(p).exists():
+        raise ApiError("Pasta não encontrada.")
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", p])
+    elif os.name == "nt":
+        os.startfile(p)        # noqa: S606 — abre no Explorer
+    else:
+        subprocess.Popen(["xdg-open", p])
+    return {"ok": True}
 
 
 GET = {"/api/estado": acao_estado, "/api/raizes": acao_raizes, "/api/listar": acao_listar}
 POST = {"/api/config": acao_config, "/api/escolher": acao_escolher, "/api/assets/apontar": acao_apontar_asset,
         "/api/dia": acao_dia, "/api/cartao/texto": acao_cartao_texto, "/api/transcricoes": acao_transcricoes,
         "/api/skoopia": acao_skoopia, "/api/material": acao_material, "/api/mapa": acao_mapa,
-        "/api/montar": acao_montar}
+        "/api/montar": acao_montar, "/api/abrir_pasta": acao_abrir_pasta}
 
 
 # ====================================================================== HTTP

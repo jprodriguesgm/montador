@@ -163,7 +163,7 @@ function mostrarDia(r) {
   }).join("");
   $("listaSkoopia").querySelectorAll("[data-pend]").forEach((sel) => (sel.onchange = () => sel.value && enviarSkoopia({ escolher: { nome: sel.dataset.pend, video: sel.value } })));
   $("listaSkoopia").querySelectorAll("[data-rmsk]").forEach((b) => (b.onclick = () => enviarSkoopia({ remover: b.dataset.rmsk })));
-  $("dicaSkoopia").textContent = sk.length ? "As marcações entram na timeline na montagem (etapa 2). Contagem por aula no mapa do dia."
+  $("dicaSkoopia").textContent = sk.length ? "As marcações entram na timeline ao montar. Contagem por aula no mapa do dia."
     : "Sem SRTs da Skoopia, o app usa as regras do Fluxo NPD (sem IA).";
 
   mostrarMapa(r.mapa);
@@ -256,6 +256,40 @@ async function material(corpo) {
   try { mostrarDia(await api("/api/material", corpo)); } catch (e) { toast(e.message); }
 }
 
+// ------------------------------------------------------------------ montar
+
+function abrirMontar() {
+  if (!S.dia) { toast("Escolha a pasta do dia primeiro."); return; }
+  const proj = S.dia.projeto || (S.dia.raiz.replace(/[\\/]+$/, "") + (S.dia.raiz.includes("\\") ? "\\" : "/") + "Projeto");
+  $("montarDestino").value = proj;
+  const nSk = (S.dia.skoopia || []).length, modo = S.estado.config.marcacoes;
+  const fonte = modo === "regras" || (modo === "auto" && !nSk) ? "regras do Fluxo NPD (sem IA)" : "Skoopia";
+  const fmt = $("formato").value === "SCREENCAST" ? "Screencast" : $("formato").value;
+  $("montarResumo").textContent = `${S.aulas.length} aula(s) · formato ${fmt} · marcações: ${fonte}. Um XML por aula.`
+    + ($("formato").value === "TP" ? " Os slides entram na próxima versão (etapa 3)." : "");
+  $("montarAntes").classList.remove("hidden"); $("montarDepois").classList.add("hidden");
+  $("montarIr").classList.remove("hidden"); $("montarAbrir").classList.add("hidden");
+  $("modalMontar").classList.remove("hidden");
+}
+
+async function montarAgora() {
+  $("montarIr").textContent = "Montando…";
+  try {
+    const r = await api("/api/montar", { faixas: S.faixas, titulos: S.titulos, formato: $("formato").value,
+      insercao: $("insercao").value, destino: $("montarDestino").value.trim() });
+    $("montarLista").innerHTML = r.resultados.map((x) => `
+      <div class="arq-linha"><span class="n">${esc(x.nome)}.xml</span>
+        <span class="info ${x.erro ? "pend" : ""}">${x.erro ? "não gerado: " + esc(x.erro)
+          : `${x.n_erro} erro(s) · ${x.n_bastidores} bastidores · ${x.n_silencio} silêncio(s)`}</span><span></span></div>`).join("");
+    $("montarAvisos").innerHTML = r.avisos.map((a) => `<div class="aviso">${esc(a)}</div>`).join("")
+      + `<div class="dica">Relatório salvo junto: ${esc(r.relatorio.split(/[\\/]/).pop())}</div>`;
+    $("montarAntes").classList.add("hidden"); $("montarDepois").classList.remove("hidden");
+    $("montarIr").classList.add("hidden"); $("montarAbrir").classList.remove("hidden");
+    $("montarAbrir").onclick = () => api("/api/abrir_pasta", { caminho: r.destino }).catch((e) => toast(e.message));
+  } catch (e) { toast(e.message); }
+  $("montarIr").textContent = "Montar";
+}
+
 // ------------------------------------------------------------------ início
 
 async function iniciar() {
@@ -328,7 +362,10 @@ async function iniciar() {
     $("modalTrecho").classList.add("hidden");
     refazerMapa({ dividir: { video: f.video, tempo: t } });
   };
-  $("montar").onclick = async () => { try { await api("/api/montar", { aulas: S.aulas, titulos: S.titulos }); } catch (e) { toast(e.message); } };
+  $("montar").onclick = abrirMontar;
+  $("montarFechar").onclick = () => $("modalMontar").classList.add("hidden");
+  $("montarTrocar").onclick = async () => { const p = await escolher("pasta", "Onde salvar os XMLs", $("montarDestino").value); if (p) $("montarDestino").value = p; };
+  $("montarIr").onclick = montarAgora;
 
   setInterval(() => fetch("/api/ping", { method: "POST" }).catch(() => {}), 20000);
 }
