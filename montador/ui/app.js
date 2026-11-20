@@ -140,17 +140,26 @@ function mostrarDia(r) {
   atualizarFormato();
 
   const m = d.material;
+  const fora = m.fora || [];
+  const nTP = fora.filter((f) => f.motivo === "teleprompter").length;
   $("pilulasMaterial").innerHTML = [
     m.pptx.length ? pilula(`${m.pptx.length} .pptx`) : "", m.docx.length ? pilula(`${m.docx.length} roteiro(s) .docx`) : "",
     m.imagens.length ? pilula(`${m.imagens.length} imagem(ns)`) : "",
+    nTP ? pilula(`${nTP} de teleprompter (fora)`, "") : "",
   ].join(" ") || `<span class="dica">Nenhum material na pasta Originais.</span>`;
   const manuais = new Set(m.manuais || []);
-  const todos = [...m.pptx, ...m.docx, ...m.imagens];
-  $("listaMaterial").innerHTML = todos.length > 12 ? "" : todos.map((p) => `
-    <div class="arq-linha"><span class="n" title="${esc(p)}">${esc(p.split(/[\\/]/).pop())}</span>
+  const nome = (p) => esc(p.split(/[\\/]/).pop());
+  const linhas = [...m.pptx, ...m.docx, ...m.imagens].map((p) => `
+    <div class="arq-linha"><span class="n" title="${esc(p)}">${nome(p)}</span>
       <span class="info">${manuais.has(p) ? "escolhido à mão" : "Originais"}</span>
-      ${manuais.has(p) ? `<button class="x" data-rm="${esc(p)}" title="Tirar">✕</button>` : "<span></span>"}</div>`).join("");
+      <button class="x" data-rm="${esc(p)}" title="Tirar da montagem">✕</button></div>`);
+  linhas.push(...fora.map((f) => `
+    <div class="arq-linha fora"><span class="n" title="${esc(f.arquivo)}">${nome(f.arquivo)}</span>
+      <span class="info">${f.motivo === "teleprompter" ? "teleprompter: só para a gravação" : "tirado"}</span>
+      <button class="btn pequeno" data-usar="${esc(f.arquivo)}" title="Usar na montagem">usar</button></div>`));
+  $("listaMaterial").innerHTML = linhas.join("");
   $("listaMaterial").querySelectorAll("[data-rm]").forEach((b) => (b.onclick = () => material({ remover: b.dataset.rm })));
+  $("listaMaterial").querySelectorAll("[data-usar]").forEach((b) => (b.onclick = () => material({ usar: b.dataset.usar })));
 
   const sk = d.skoopia || [];
   const opVideos = d.videos.map((v) => `<option value="${esc(v.nome)}">${esc(v.nome)}</option>`).join("");
@@ -334,8 +343,11 @@ async function iniciar() {
     if (fs.length) enviarSkoopia({ arquivos: await lerArquivos(fs) });
   };
   $("addMaterial").onclick = async () => {
-    const p = await escolher("arquivo", "Arquivo de inserção (.pptx, .docx ou imagem)", S.dia?.originais || S.dia?.raiz);
-    if (p) material({ adicionar: [p] });
+    const titulo = "Arquivos de inserção (.pptx, .docx ou imagens) — segure Cmd para escolher vários";
+    const r = await api("/api/escolher", { tipo: "arquivos", titulo, inicio: S.dia?.originais || S.dia?.raiz });
+    let ps = r.caminhos || [];
+    if (r.sem_janela) { const p = await navegar("arquivo", titulo, S.dia?.originais || S.dia?.raiz); ps = p ? [p] : []; }
+    if (ps.length) material({ adicionar: ps });
   };
   $("pastaMaterial").onclick = async () => {
     const p = await escolher("pasta", "Pasta com o material de inserção", S.dia?.originais || S.dia?.raiz);

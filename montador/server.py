@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import re
 import sys
 import socket
 import threading
@@ -43,11 +44,14 @@ class Estado:
         self.skoopia: list = []          # arquivos importados: {nome, tipo, modo, video, motivo, n}
         self.pendentes: dict = {}        # nome → cues (esperando o editor escolher o vídeo)
         self.material_extra: list = []   # arquivos de inserção escolhidos à mão
+        self.material_fora: set = set()  # arquivos tirados da lista (não entram na montagem)
+        self.material_dentro: set = set()  # arquivos TP que o editor decidiu usar mesmo assim
 
     def limpar_dia(self, raiz: str):
         if self.raiz_manuais != raiz:
             self.manuais, self.raiz_manuais, self.tabela = {}, raiz, []
             self.marcas, self.skoopia, self.pendentes, self.material_extra = {}, [], {}, []
+            self.material_fora, self.material_dentro = set(), set()
 
 
 ESTADO = Estado()
@@ -73,6 +77,8 @@ def acao_escolher(corpo) -> dict:
     try:
         if tipo == "pasta":
             p = dialogs.choose_folder(titulo, inicio)
+        elif tipo == "arquivos":
+            return {"caminhos": dialogs.choose_files(titulo, inicio) or []}
         else:
             p = dialogs.choose_file(titulo, inicio)
     except dialogs.Unsupported:
@@ -176,13 +182,20 @@ def acao_skoopia(corpo) -> dict:
         d, falas, tabela = ESTADO.dia, ESTADO.falas, ESTADO.tabela
     if d is None:
         raise ApiError("Escolha a pasta do dia primeiro.")
-    for a in corpo.get("arquivos") or []:
-        cues = srt.ler_texto(a.get("conteudo") or "")
-        if not cues:
-            continue
-        nome = a.get("nome") or "sem nome.srt"
+    lidos = [(a.get("nome") or "sem nome.srt", srt.ler_texto(a.get("conteudo") or "")) for a in corpo.get("arquivos") or []]
+    lidos = sorted((x for x in lidos if x[1]), key=lambda x: skoopia.tipo(x[1]) != "cortes")   # cortes primeiro: têm citações
+    for nome, cues in lidos:
         dest = skoopia.ligar(nome, cues, d["videos"], falas, tabela)
+        if dest.get("tabela") and not tabela:
+            tabela = dest["tabela"]
+            with ESTADO.lock:
+                ESTADO.tabela = tabela
         _guardar_skoopia(nome, cues, dest, tabela)
+    if tabela:              # pendentes que só esperavam a tabela
+        for nome, cues in list(ESTADO.pendentes.items()):
+            dest = skoopia.ligar(nome, cues, d["videos"], falas, tabela)
+            if dest["modo"] != "pendente":
+                _guardar_skoopia(nome, cues, dest, tabela)
     if corpo.get("escolher"):                 # o editor escolheu o vídeo de um pendente
         e = corpo["escolher"]
         cues = ESTADO.pendentes.get(e.get("nome"))
@@ -209,11 +222,19 @@ def _guardar_skoopia(nome: str, cues, dest: dict, tabela: list):
             ESTADO.pendentes[nome] = cues
         for video, lista in skoopia.distribuir(cues, dest, tabela).items():
             ESTADO.marcas.setdefault(video, {})[nome] = lista
-        ESTADO.skoopia.append({"nome": nome, "tipo": t, "n": len(cues), **dest})
+        ESTADO.skoopia.append({"nome": nome, "tipo": t, "n": len(cues), **{k: v for k, v in dest.items() if k != "tabela"}})
+
+
+# arquivos que começam com "TP" (TP-aula-17.pptx, TP_aula 3.pptx…) são do teleprompter: só para a gravação
+_TELEPROMPTER = re.compile(r"^TP(?=[\s_\-.]|\d)", re.I)
+
+
+def eh_teleprompter(caminho: str) -> bool:
+    return bool(_TELEPROMPTER.match(Path(caminho).name))
 
 
 def acao_material(corpo) -> dict:
-    """Material de inserção escolhido à mão (arquivos ou uma pasta)."""
+    """Material de inserção: adicionar arquivos/pasta, tirar qualquer um da lista ou voltar a usar."""
     with ESTADO.lock:
         d = ESTADO.dia
     if d is None:
@@ -227,21 +248,41 @@ def acao_material(corpo) -> dict:
                   and q.suffix.lower() in (".pptx", ".docx", ".jpg", ".jpeg", ".png")]
     with ESTADO.lock:
         for n in novos:
-            if Path(n).is_file() and n not in ESTADO.material_extra:
-                ESTADO.material_extra.append(n)
-        if corpo.get("remover"):
-            ESTADO.material_extra = [x for x in ESTADO.material_extra if x != corpo["remover"]]
+            if Path(n).is_file():
+                if n not in ESTADO.material_extra:
+                    ESTADO.material_extra.append(n)
+                ESTADO.material_fora.discard(n)
+                if corpo.get("adicionar") and eh_teleprompter(n):   # escolhido um a um: o editor quer usar
+                    ESTADO.material_dentro.add(n)
+        rm = corpo.get("remover")
+        if rm:
+            if rm in ESTADO.material_extra:
+                ESTADO.material_extra = [x for x in ESTADO.material_extra if x != rm]
+            else:
+                ESTADO.material_fora.add(rm)
+            ESTADO.material_dentro.discard(rm)
+        us = corpo.get("usar")
+        if us:
+            ESTADO.material_fora.discard(us)
+            if eh_teleprompter(us):
+                ESTADO.material_dentro.add(us)
     return _resultado(d, ESTADO.falas, (d.get("cartao") or {}).get("titulos") or [])
 
 
 def _material(d: dict) -> dict:
-    out = {"pptx": list(d["material"]["pptx"]), "docx": list(d["material"]["docx"]),
-           "imagens": list(d["material"]["imagens"]), "manuais": list(ESTADO.material_extra)}
-    for p in ESTADO.material_extra:
+    """Material que entra na montagem + o que ficou de fora (com o motivo)."""
+    out = {"pptx": [], "docx": [], "imagens": [], "manuais": list(ESTADO.material_extra), "fora": []}
+    todos = list(d["material"]["pptx"]) + list(d["material"]["docx"]) + list(d["material"]["imagens"])
+    todos += [p for p in ESTADO.material_extra if p not in todos]
+    for p in todos:
+        if p in ESTADO.material_fora:
+            out["fora"].append({"arquivo": p, "motivo": "tirado"})
+            continue
+        if eh_teleprompter(p) and p not in ESTADO.material_dentro:
+            out["fora"].append({"arquivo": p, "motivo": "teleprompter"})
+            continue
         ext = Path(p).suffix.lower()
-        chave = "pptx" if ext == ".pptx" else "docx" if ext == ".docx" else "imagens"
-        if p not in out[chave]:
-            out[chave].append(p)
+        out["pptx" if ext == ".pptx" else "docx" if ext == ".docx" else "imagens"].append(p)
     return out
 
 

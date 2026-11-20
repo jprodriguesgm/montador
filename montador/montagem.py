@@ -5,7 +5,7 @@ Montador:
   - cortes da Skoopia (ou das regras sem IA) já planejados para o trecho de cada aula;
   - aula em mais de um vídeo: uma sequência por trecho ("03 Título" e "03 Título (parte 2)");
   - pós-processo: nome "01 Título", tipo de cada marcação (ERRO, BASTIDORES, A CONFERIR, SILÊNCIO) com a cor
-    das Configurações, nenhum efeito de cor (Lumetri) e os arquivos de vinheta/brasão/fundos desta máquina.
+    das Configurações, nenhum efeito (Lumetri, Desfoque gaussiano) e os arquivos de vinheta/brasão/fundos desta máquina.
 Nada é apagado: tudo entra cortado nos limites, com cor e marcador.
 """
 from __future__ import annotations
@@ -153,19 +153,22 @@ def _url(caminho: str) -> str:
     return "file://localhost" + quote(unicodedata.normalize("NFD", caminho), safe="/")
 
 
+EFEITOS_FORA = {"lumetri", "gaussian blur"}
+
+
 def pos_processar(arquivo: Path, nome_seq: str, cfg: dict) -> dict:
     texto = arquivo.read_text(encoding="utf-8")
     root = ET.fromstring(texto.split("\n", 2)[2] if texto.startswith("<?xml") else texto)
     cores = cfg.get("cores") or {}
-    cont = {"n_erro": 0, "n_bastidores": 0, "n_silencio": 0, "n_conferir": 0, "lumetri_removidos": 0}
+    cont = {"n_erro": 0, "n_bastidores": 0, "n_silencio": 0, "n_conferir": 0, "efeitos_removidos": 0}
 
-    # sem efeito de cor
+    # sem efeitos: cor (Lumetri) e desfoque gaussiano saem; ficam só movimento, corte, opacidade e áudio
     for pai in root.iter():
         for f in list(pai.findall("filter")):
             e = f.find("effect")
-            if e is not None and (e.findtext("effectid") or "").lower() == "lumetri":
+            if e is not None and (e.findtext("effectid") or "").lower() in EFEITOS_FORA:
                 pai.remove(f)
-                cont["lumetri_removidos"] += 1
+                cont["efeitos_removidos"] += 1
 
     # arquivos de vinheta, brasão e fundos desta máquina
     por_nome = {}
@@ -274,7 +277,7 @@ def _relatorio(dia, formato, insercao, usar_skoopia, resultados, avisos, destino
             continue
         linhas.append(f"{r['nome']} · {r['video']} de {r['T0']:.1f} a {r['T1']:.1f} s · {r['n_erro']} erro(s), "
                       f"{r['n_bastidores']} bastidores, {r['n_silencio']} silêncio(s), {r['n_conferir']} a conferir"
-                      + (f" · {r['lumetri_removidos']} Lumetri removido(s)" if r["lumetri_removidos"] else ""))
+                      + (f" · {r['efeitos_removidos']} efeito(s) removido(s)" if r["efeitos_removidos"] else ""))
     linhas += [""] + [f"Aviso: {a}" for a in avisos]
     p.write_text("\n".join(linhas) + "\n", encoding="utf-8")
     return p

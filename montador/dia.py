@@ -71,7 +71,7 @@ def ler(caminho: str | Path) -> dict:
             srt_p = q.with_suffix(".srt")
             videos.append({
                 "nome": q.stem, "arquivo": str(q),
-                "duracao": inf.get("duracao"), "largura": inf.get("largura"), "altura": inf.get("altura"),
+                "duracao": inf.get("duracao") or mp4info.ffprobe(q), "largura": inf.get("largura"), "altura": inf.get("altura"),
                 "srt": str(srt_p) if srt_p.is_file() else None,
             })
     if not videos:

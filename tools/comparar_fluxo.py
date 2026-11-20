@@ -5,7 +5,7 @@ Uso: python3 tools/comparar_fluxo.py <pasta do dia> <pasta "3 Geradores de XML" 
 Para cada formato (TP sem inserção, TV e Screencast), gera as sequências pelos dois caminhos com as mesmas
 transcrições e compara os XMLs, ignorando só o que o Montador muda de propósito:
 nome da sequência, nome do marcador de erro ("ERRO a conferir" → "ERRO"), comentários com o tipo da
-marcação, Lumetri removido, identificadores aleatórios (uuid) e caminhos dos arquivos de assets.
+marcação, Lumetri e desfoque gaussiano removidos, identificadores aleatórios (uuid) e caminhos dos arquivos de assets.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def normal(caminho: Path) -> list[str]:
     for pai in root.iter():
         for f in list(pai.findall("filter")):
             e = f.find("effect")
-            if e is not None and (e.findtext("effectid") or "").lower() == "lumetri":
+            if e is not None and (e.findtext("effectid") or "").lower() in montagem.EFEITOS_FORA:
                 pai.remove(f)
         for tag in ("uuid", "comment"):
             for x in list(pai.findall(tag)):

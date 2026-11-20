@@ -39,13 +39,13 @@ def _seq(arquivo, nome):
 
 
 @pytest.mark.parametrize("formato", ["TP", "TV", "SCREENCAST"])
-def test_monta_os_quatro_xmls_sem_lumetri(dia_teste, formato):
+def test_monta_os_quatro_xmls_sem_efeitos(dia_teste, formato):
     d, falas, m, tmp = dia_teste
     r = montagem.montar(d, falas, m["aulas"], formato, "nenhuma", {}, tmp / "out", modo="regras")
     assert [x["erro"] for x in r["resultados"]] == [None] * 4
     assert [Path(x["arquivo"]).name for x in r["resultados"]] == ["01 Um.xml", "02 Dois.xml", "03 Tres.xml", "04 Quatro.xml"]
     root, seq = _seq(r["resultados"][0]["arquivo"], "01 Um")
-    assert not [e for e in root.iter("effectid") if e.text == "Lumetri"]
+    assert not [e for e in root.iter("effectid") if e.text in ("Lumetri", "Gaussian Blur")]
     assert Path(r["relatorio"]).is_file()
 
 

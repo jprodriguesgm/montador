@@ -104,3 +104,6 @@ label.btn{display:inline-flex;align-items:center}
 .soltar label.btn{margin-left:8px}
 .soltar.soltando{background:rgba(74,143,231,.12)}
 .aula .marcas{grid-column:3;color:var(--fraco);font-size:12px}
+
+#listaMaterial{max-height:220px;overflow:auto}
+.arq-linha.fora .n{color:var(--fraco);text-decoration:line-through}

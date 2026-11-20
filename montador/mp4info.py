@@ -50,7 +50,16 @@ def info(caminho: str | Path) -> dict | None:
 
 def _moov(f, ini: int, fim: int) -> dict | None:
     out = {"duracao": None, "largura": 0, "altura": 0}
+    escala_mv, frag = 0, None
     for tipo, a, b in _boxes(f, ini, fim):
+        if tipo == b"mvex":          # MP4 fragmentado (OBS): a duração fica em mvex/mehd
+            for t2, a2, b2 in _boxes(f, a, b):
+                if t2 == b"mehd":
+                    f.seek(a2)
+                    dados = f.read(min(b2 - a2, 12))
+                    if len(dados) >= 8:
+                        frag = struct.unpack(">Q", dados[4:12])[0] if dados[0] == 1 and len(dados) >= 12 \
+                            else struct.unpack(">I", dados[4:8])[0]
         if tipo == b"mvhd":
             f.seek(a)
             dados = f.read(min(b - a, 32))
@@ -60,6 +69,7 @@ def _moov(f, ini: int, fim: int) -> dict | None:
             else:
                 escala, dur = struct.unpack(">II", dados[12:20])
             if escala:
+                escala_mv = escala
                 out["duracao"] = dur / escala
         elif tipo == b"trak":
             for t2, a2, b2 in _boxes(f, a, b):
@@ -71,4 +81,22 @@ def _moov(f, ini: int, fim: int) -> dict | None:
                         w, h = w >> 16, h >> 16
                         if w * h > out["largura"] * out["altura"]:
                             out["largura"], out["altura"] = w, h
+    if not out["duracao"] and frag and escala_mv:
+        out["duracao"] = frag / escala_mv
     return out if out["duracao"] is not None else None
+
+
+def ffprobe(caminho: str | Path) -> float | None:
+    """Duração pelo ffprobe, se estiver instalado (último recurso)."""
+    import shutil
+    import subprocess
+    exe = shutil.which("ffprobe") or next((x for x in ("/opt/homebrew/bin/ffprobe", "/usr/local/bin/ffprobe")
+                                            if Path(x).is_file()), None)
+    if not exe:
+        return None
+    try:
+        r = subprocess.run([exe, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(caminho)],
+                           capture_output=True, text=True, timeout=20)
+        return float(r.stdout.strip()) or None
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None

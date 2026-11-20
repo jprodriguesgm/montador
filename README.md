@@ -11,11 +11,11 @@ O desenho completo está em [DESENHO.md](DESENHO.md).
   - marcações da Skoopia (ERRO, BASTIDORES) ou as regras do Fluxo NPD (sem IA), mais SILÊNCIO detectado pelo app;
   - cor de cada tipo de marcação pelas Configurações; nada é apagado;
   - sequências "01 Título"; aula em dois vídeos sai em duas partes;
-  - sem Lumetri; vinheta, brasão e fundos com os caminhos desta máquina;
+  - sem efeitos (Lumetri e Desfoque gaussiano saem); vinheta, brasão e fundos com os caminhos desta máquina;
   - relatório de uso ao lado dos XMLs.
 - **Etapa 3:** slides (.pptx → JPEG) e inserções.
 
-No modo sem IA, o Montador gera exatamente o mesmo XML que o Fluxo NPD (conferido com `tools/comparar_fluxo.py`), mudando só o nome da sequência, o nome do marcador e a remoção do Lumetri.
+No modo sem IA, o Montador gera exatamente o mesmo XML que o Fluxo NPD (conferido com `tools/comparar_fluxo.py`), mudando só o nome da sequência, o nome do marcador e a remoção do Lumetri e do Desfoque gaussiano.
 
 ## Testar no Mac (antes do app empacotado)
 
@@ -34,3 +34,8 @@ python3 -m montador mapa "/caminho/da/pasta do dia"
 ```bash
 python3 -m pytest -q tests
 ```
+
+### Ajustes 0.2.1
+- Cortes e inserções da Skoopia feitos a partir do SRT único são divididos sozinhos por vídeo, mesmo sem a tabela: o Montador refaz a posição de cada vídeo dentro do SRT único e confere pelas falas citadas.
+- Duração dos vídeos do OBS (MP4 fragmentado) lida pelo cabeçalho ou, se faltar, pelo ffprobe.
+- Material: escolher vários arquivos de uma vez, tirar qualquer arquivo da lista (✕) e voltar a usar ("usar"). Arquivos que começam com "TP" (teleprompter) ficam fora por padrão.

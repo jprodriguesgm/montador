@@ -53,6 +53,23 @@ def choose_file(prompt: str = "Escolha o arquivo", start: str | None = None,
                                                         ("Todos", "*")]))
 
 
+def choose_files(prompt: str = "Escolha os arquivos", start: str | None = None) -> list[str] | None:
+    """Vários arquivos de uma vez (Cmd/Shift no Mac)."""
+    if sys.platform == "darwin":
+        alvo = f' default location (POSIX file "{_osa_quote(start)}")' if start and Path(start).is_dir() else ""
+        script = (f'set fs to (choose file with prompt "{_osa_quote(prompt)}"{alvo} with multiple selections allowed)\n'
+                  'set out to ""\n'
+                  'repeat with f in fs\n set out to out & POSIX path of f & linefeed\nend repeat\n'
+                  'return out')
+        r = _run_osa(script)
+        return [x for x in (r or "").splitlines() if x.strip()] or None
+    if os.name == "nt":
+        raise Unsupported("Windows: navegador de pastas do app")
+    import tkinter  # noqa: F401  (só para falhar cedo sem tk)
+    r = _tk(lambda fd: fd.askopenfilenames(title=prompt, initialdir=start or None))
+    return list(r) if r else None
+
+
 def _run_osa(script: str) -> str | None:
     if not shutil.which("osascript"):
         raise Unsupported()
