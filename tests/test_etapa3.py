@@ -74,7 +74,7 @@ def _todos(tmp_path):
 
 def test_casa_skoopia_por_codigo_titulo_e_sem_slide(tmp_path):
     ss = _todos(tmp_path)
-    assert [s["n"] for s in ss] == [1, 2]                 # referências ficam fora
+    assert [s["n"] for s in ss if not s["referencias"]] == [1, 2]      # referências só entram pelo número
     cues = [Cue(1, 10, 50, "Estruturas de árvore\n\nC11 raiz e folhas"),
             Cue(2, 60, 70, "Filas e pilhas\n\nPrimeiro a entrar"),
             Cue(3, 80, 90, "Grafos dirigidos\n\nVértices e arestas"),
@@ -165,3 +165,16 @@ def test_imagens_prontas_sem_o_pptx_na_lista(tmp_path):
     solta.write_bytes((tmp_path / "Aula" / "Aula.002.jpg").read_bytes())
     s = insercoes.slides_de_imagens([str(solta)], [])[0]
     assert s["codigo"] == "C11" and s["imagem"] == str(solta)
+
+
+def test_decupagem_pelo_numero_do_slide(tmp_path):
+    d1, d2 = tmp_path / "1-introdução 1.pptx", tmp_path / "2- introdução 2.pptx"
+    _deck(d1); _deck(d2)
+    lista = [{"pptx": str(p), "slides": slides.ler(p), "imagens": {}} for p in (d2, d1)]
+    ss = insercoes.todos_os_slides(lista)
+    cues = [Cue(1, 10, 20, "SLIDE 2.02 – Árvores"), Cue(2, 30, 40, "SLIDE 1.03 – Referências"),
+            Cue(3, 50, 55, "PALAVRA-CHAVE: FILAS"), Cue(4, 60, 65, "TARJA DE NOME: Fulano")]
+    its = insercoes.casar_skoopia(cues, ss)
+    assert [(Path(it["slide"]["pptx"]).name, it["slide"]["n"]) if it["slide"] else None for it in its] == [
+        ("2- introdução 2.pptx", 2), ("1-introdução 1.pptx", 3), None, None]
+    assert [insercoes.rotulo(it["texto"]) for it in its[2:]] == ["PALAVRA-CHAVE", "TARJA DE NOME"]

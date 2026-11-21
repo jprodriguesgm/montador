@@ -291,10 +291,16 @@ def _material(d: dict) -> dict:
 def _resultado(d: dict, falas: dict, titulos_brutos: list[str]) -> dict:
     # 1ª passada sem títulos para saber quantas aulas o vídeo mostra; depois desgruda os títulos para
     # bater com essa conta e refaz o mapa com eles
-    previa = mapa.sugerir(d["videos"], falas, [])
+    with ESTADO.lock:
+        marcas, tabela = dict(ESTADO.marcas), list(ESTADO.tabela or [])
+    pela = mapa.pela_skoopia(d["videos"], falas, marcas, tabela, [])     # a Skoopia/decupagem diz onde cada aula começa?
+    previa = pela or mapa.sugerir(d["videos"], falas, [])
     sep = cartao.separar_titulos(titulos_brutos, len(previa["aulas"]) or None) if titulos_brutos else \
         {"titulos": [], "separados": 0, "conferir": False, "motivo": ""}
-    m = mapa.sugerir(d["videos"], falas, sep["titulos"])
+    m = (mapa.pela_skoopia(d["videos"], falas, marcas, tabela, sep["titulos"]) if pela
+         else mapa.sugerir(d["videos"], falas, sep["titulos"]))
+    if pela:
+        m["avisos"] = [f"Aulas divididas pela {pela['fonte']}"] + m["avisos"]
     with ESTADO.lock:
         for a in m["aulas"]:
             a["marcas"] = skoopia.contar(ESTADO.marcas, a["trechos"])
