@@ -165,3 +165,33 @@ def test_imagens_prontas_sem_o_pptx_na_lista(tmp_path):
     solta.write_bytes((tmp_path / "Aula" / "Aula.002.jpg").read_bytes())
     s = insercoes.slides_de_imagens([str(solta)], [])[0]
     assert s["codigo"] == "C11" and s["imagem"] == str(solta)
+
+
+def test_skoopia_manda_o_texto_do_slide(tmp_path):
+    """A Skoopia copia o texto do slide (título às vezes na última linha) ou cita "Slide N ... apresentação D"."""
+    from pptx import Presentation
+    from pptx.util import Inches
+    p = Presentation()
+    for titulo, corpo in [("Legislação", ["CF", "Lei 8.212/91", "Lei 8.213/91", "Decreto 3.048/99"]),
+                          ("Dos Dependentes", ["Art. 16. São beneficiários na condição de dependentes do segurado",
+                                               "I - o cônjuge, a companheira e o filho menor de 21 anos"]),
+                          ("Dos Dependentes", ["Art. 16 (...) II - os pais; III - o irmão não emancipado menor de 21 anos"])]:
+        s = p.slides.add_slide(p.slide_layouts[5])
+        s.shapes.title.text = titulo
+        tb = s.shapes.add_textbox(Inches(1), Inches(2), Inches(8), Inches(3)).text_frame
+        tb.text = corpo[0]
+        for x in corpo[1:]:
+            tb.add_paragraph().text = x
+    deck = tmp_path / "2- introdução 2.pptx"
+    p.save(deck)
+    ss = insercoes.todos_os_slides([{"pptx": str(deck), "slides": slides.ler(deck), "imagens": {}}])
+    cues = [Cue(1, 10, 160, "CF\nLei 8.212/91\nLei 8.213/91\nDecree 3.048/99\nInstrução Normativa 128/2022\nLegislação"),
+            Cue(2, 200, 260, "Dos Dependentes\nArt. 16 (...)\nII - os pais;\nIII - o irmão não emancipado, menor de 21 anos\nLei 8.213/91"),
+            Cue(3, 200, 300, "Dos Dependentes\nArt. 16. São beneficiários na condição de dependentes do segurado:\n"
+                             "I - o cônjuge, a companheira, o companheiro e o filho menor de 21 anos"),
+            Cue(4, 400, 420, "Slide 1 (slide de abertura da apresentação 2)")]
+    its = insercoes.casar_skoopia(cues, ss)
+    assert [it["slide"]["n"] if it["slide"] else None for it in its] == [1, 3, 2, 1]
+    # duas inserções no mesmo ponto não se sobrepõem na faixa
+    its = insercoes.duracoes(its, 1000, 15)
+    assert all(a["fim_tela"] <= b["ini"] for a, b in zip(its, its[1:]))

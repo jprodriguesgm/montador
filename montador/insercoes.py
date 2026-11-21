@@ -109,8 +109,35 @@ def slides_de_imagens(imagens: list[str], pptx_usados: list[str]) -> list[dict]:
 
 # ------------------------------------------------------------------ casar
 
+_SLIDE_DA_APRESENTACAO = re.compile(r"slide\s+(\d+)\b.*?apresenta[cç][aã]o\s+(\d+)", re.I | re.S)
+
+
+def _deck_do_slide(s: dict) -> int:
+    m = re.match(r"^\s*(\d+)\s*[-_.)\s]", Path(s.get("pptx") or "").name)
+    return int(m.group(1)) if m else 0
+
+
+def _parecido(texto: str, s: dict) -> float:
+    """Quanto o texto da inserção é o texto do slide: título (1ª ou última linha) e palavras nos dois sentidos."""
+    pal = _palavras(texto)
+    linhas = [ln.strip() for ln in texto.split("\n") if ln.strip()]
+    tit_s = _norm(s["titulo"])
+    r = max((SequenceMatcher(None, _norm(_titulo(x)), tit_s).ratio() for x in (linhas[:1] + linhas[-1:]) if tit_s),
+            default=0.0)
+    if not pal or not s["palavras"]:
+        return r
+    comum = len(pal & s["palavras"])
+    cobre_slide, cobre_texto = comum / len(s["palavras"]), comum / len(pal)
+    f1 = 2 * cobre_slide * cobre_texto / (cobre_slide + cobre_texto) if comum else 0.0
+    # o título sozinho não decide (vários slides podem ter o mesmo título): o conteúdo desempata
+    return max(f1, 0.5 * r + 0.5 * max(f1, cobre_slide))
+
+
 def casar_skoopia(cues: list[Cue], slides: list[dict]) -> list[dict]:
-    """Inserções da Skoopia (já no tempo do vídeo) -> itens {ini, fim, slide|None, texto, como}."""
+    """Inserções da Skoopia (já no tempo do vídeo) -> itens {ini, fim, slide|None, texto, como}.
+
+    A Skoopia manda o texto do slide (às vezes com o título na última linha), um código de cartela (C33)
+    ou uma nota como "Slide 10 (slide final da apresentação 1)"."""
     out = []
     for c in sorted(cues, key=lambda x: x.ini):
         if skoopia.classe(c) != "insercao":
@@ -121,18 +148,15 @@ def casar_skoopia(cues: list[Cue], slides: list[dict]) -> list[dict]:
         if cod:
             alvo = next((s for s in slides if s.get("codigo") == cod.group(1).upper()), None)
             como = "Skoopia, pelo código" if alvo else ""
+        num = _SLIDE_DA_APRESENTACAO.search(texto) if alvo is None else None
+        if num:
+            n, d = int(num.group(1)), int(num.group(2))
+            alvo = next((s for s in slides if s["n"] == n and _deck_do_slide(s) == d), None)
+            como = "Skoopia, pelo número do slide" if alvo else ""
         if alvo is None and slides:
-            tit = _norm(_titulo(texto))
-            pal = _palavras(texto)
-            melhor, nota = None, 0.0
-            for s in slides:
-                r = SequenceMatcher(None, tit, _norm(s["titulo"])).ratio() if tit and s["titulo"] else 0.0
-                j = len(pal & s["palavras"]) / max(1, len(s["palavras"])) if s["palavras"] else 0.0
-                n = max(r, 0.6 * r + 0.4 * j)
-                if n > nota:
-                    melhor, nota = s, n
-            if nota >= 0.6:
-                alvo, como = melhor, "Skoopia, pelo título"
+            notas = sorted(((_parecido(texto, s), k) for k, s in enumerate(slides)), reverse=True)
+            if notas and notas[0][0] >= 0.6:
+                alvo, como = slides[notas[0][1]], f"Skoopia, pelo texto do slide ({notas[0][0]:.0%})"
         out.append({"ini": c.ini, "fim": c.fim, "slide": alvo, "texto": texto, "como": como or "sem slide"})
     return out
 
@@ -175,7 +199,17 @@ def duracoes(itens: list[dict], t1: float, padrao: float = DURACAO_PADRAO) -> li
         if k + 1 < len(itens):
             fim = min(fim, max(it["ini"] + 2.0, itens[k + 1]["ini"]))
         it["fim_tela"] = min(fim, t1) if t1 > it["ini"] + 2 else fim
-    return itens
+    # duas inserções no mesmo ponto (a Skoopia às vezes manda duas): a segunda entra quando a primeira sai
+    out, fim_ant = [], -1.0
+    for it in itens:
+        if it["ini"] < fim_ant:
+            dur = it["fim_tela"] - it["ini"]
+            it["ini"] = fim_ant
+            it["fim_tela"] = max(it["fim_tela"], fim_ant + min(dur, 2.0))
+        if it["fim_tela"] - it["ini"] >= 1.0:
+            out.append(it)
+            fim_ant = it["fim_tela"]
+    return out
 
 
 # ------------------------------------------------------------------ timeline
