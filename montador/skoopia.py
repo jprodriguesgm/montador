@@ -32,10 +32,7 @@ def _palavras(t: str) -> set[str]:
 
 
 def tipo(cues: list[srt.Cue]) -> str:
-    from .mapa import eh_lista_de_aulas
-    if any(_TIPO.match(c.texto) for c in cues):
-        return "cortes"
-    return "aulas" if eh_lista_de_aulas(cues) else "insercoes"
+    return "cortes" if any(_TIPO.match(c.texto) for c in cues) else "insercoes"
 
 
 def classe(c: srt.Cue) -> str:
@@ -127,8 +124,6 @@ def contar(marcas: dict, trechos: list[dict]) -> dict:
     for t in trechos:
         m = marcas.get(t["video"]) or {}
         for lista in m.values():
-            if tipo(lista) == "aulas":
-                continue
             for c in lista:
                 if c.ini < t["fim"] and c.fim > t["ini"]:
                     out[classe(c)] += 1

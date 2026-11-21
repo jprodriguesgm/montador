@@ -298,7 +298,7 @@ async function montarAgora() {
       <div class="arq-linha"><span class="n">${esc(x.nome)}${r.unico ? "" : ".xml"}</span>
         <span class="info ${x.erro ? "pend" : ""}">${x.erro ? "não gerado: " + esc(x.erro)
           : `${x.n_erro} erro(s) · ${x.n_bastidores} bastidores · ${x.n_silencio} silêncio(s)`
-            + (x.n_slides ? ` · ${x.n_slides} slide(s)` : "") + (x.n_cartelas ? ` · ${x.n_cartelas} cartela(s) a criar` : "") + (x.n_palavras ? ` · ${x.n_palavras} palavra(s)-chave` : "") + (x.n_tela ? ` · ${x.n_tela} tela(s) cheia(s)` : "")}</span><span></span></div>`).join("");
+            + (x.n_slides ? ` · ${x.n_slides} slide(s)` : "") + (x.n_cartelas ? ` · ${x.n_cartelas} cartela(s) a criar` : "") + (x.n_tela ? ` · ${x.n_tela} tela(s) cheia(s)` : "")}</span><span></span></div>`).join("");
     $("montarAvisos").innerHTML = (r.unico ? `<div class="dica">Tudo em um arquivo: <b>${esc(r.unico.split(/[\\/]/).pop())}</b></div>` : "")
       + r.avisos.map((a) => `<div class="aviso">${esc(a)}</div>`).join("")
       + `<div class="dica">Relatório salvo junto: ${esc(r.relatorio.split(/[\\/]/).pop())}</div>`;

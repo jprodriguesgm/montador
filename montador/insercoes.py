@@ -35,18 +35,6 @@ sobre por sem pra nem the and for meu minha vao vai ver bem tambem quando onde p
 todas ate sob apos entao assim ainda aqui ja so vamos pode podem deve devem temos estamos estao sendo sera forma parte
 vez vezes dia hoje aula slide fonte texto imagem elaborado elaborada autor autora""".split())
 _CODIGO = re.compile(r"\b(C\d{1,4})\b")
-_SLIDE_NUM = re.compile(r"^\s*SLIDE\s+(\d+)\s*[.,]\s*(\d+)", re.I)
-_SEM_SLIDE = re.compile(r"^\s*(PALAVRA[- ]CHAVE|TARJA)", re.I)     # não é slide do professor
-
-
-def rotulo(texto: str) -> str:
-    """Nome do marcador de uma inserção sem slide."""
-    t = texto.strip().upper()
-    if t.startswith(("PALAVRA-CHAVE", "PALAVRA CHAVE")):
-        return "PALAVRA-CHAVE"
-    if t.startswith("TARJA"):
-        return "TARJA DE NOME"
-    return "CARTELA"
 
 
 def _norm(t: str) -> str:
@@ -66,21 +54,14 @@ def _titulo(texto: str) -> str:
     return ""
 
 
-def _deck(caminho: str, ordem: int) -> int:
-    """Número do deck: o que abre o nome do arquivo ("1-introdução 1.pptx" -> 1); senão, a ordem."""
-    m = re.match(r"^\s*(\d+)\s*[-_.)\s]", Path(caminho).name)
-    return int(m.group(1)) if m else ordem
-
-
 def todos_os_slides(lista_pptx: list[dict]) -> list[dict]:
-    """[{pptx, deck, n, titulo, textos, codigo, segundos, imagem, palavras}] de todos os .pptx.
-
-    Os slides de referências ficam marcados (só entram quando a inserção pede o slide pelo número)."""
+    """[{pptx, n, titulo, textos, codigo, segundos, imagem, palavras}] de todos os .pptx, sem as referências."""
     out = []
-    lista = sorted(lista_pptx, key=lambda p: Path(p["pptx"]).name.lower())
-    for k, p in enumerate(lista, 1):
+    for p in lista_pptx:
         for s in p["slides"]:
-            out.append({**s, "pptx": p["pptx"], "deck": _deck(p["pptx"], k), "imagem": p["imagens"].get(s["n"]),
+            if s.get("referencias"):
+                continue
+            out.append({**s, "pptx": p["pptx"], "imagem": p["imagens"].get(s["n"]),
                         "palavras": _palavras(" ".join(s["textos"]))})
     return out
 
@@ -122,8 +103,7 @@ def slides_de_imagens(imagens: list[str], pptx_usados: list[str]) -> list[dict]:
             cod = re.search(r"\b(C\d{1,4})\b", nome, re.I)
             item = {"n": n or 0, "titulo": nome, "textos": [nome], "codigo": cod.group(1).upper() if cod else None,
                     "notas": "", "segundos": None, "referencias": False}
-        out.append({**item, "pptx": str(q), "deck": _deck(irmao.name, 0) if irmao is not None else 0,
-                    "imagem": str(q), "palavras": _palavras(" ".join(item["textos"]))})
+        out.append({**item, "pptx": str(q), "imagem": str(q), "palavras": _palavras(" ".join(item["textos"]))})
     return out
 
 
@@ -137,18 +117,7 @@ def casar_skoopia(cues: list[Cue], slides: list[dict]) -> list[dict]:
             continue
         texto = c.texto.strip()
         alvo, como = None, ""
-        num = _SLIDE_NUM.match(texto)
-        if num:                                   # decupagem: "SLIDE 1.03 – ..." = deck 1, slide 3
-            d, n = int(num.group(1)), int(num.group(2))
-            alvo = next((s for s in slides if s.get("deck") == d and s["n"] == n), None)
-            como = "decupagem, pelo número do slide" if alvo else ""
-            if alvo is None and len({s.get("deck") for s in slides}) == 1:
-                alvo = next((s for s in slides if s["n"] == n), None)
-                como = "decupagem, pelo número do slide" if alvo else ""
-        if alvo is None and _SEM_SLIDE.match(texto):
-            out.append({"ini": c.ini, "fim": c.fim, "slide": None, "texto": texto, "como": "sem slide"})
-            continue
-        cod = _CODIGO.search(texto) if alvo is None else None
+        cod = _CODIGO.search(texto)
         if cod:
             alvo = next((s for s in slides if s.get("codigo") == cod.group(1).upper()), None)
             como = "Skoopia, pelo código" if alvo else ""
@@ -157,8 +126,6 @@ def casar_skoopia(cues: list[Cue], slides: list[dict]) -> list[dict]:
             pal = _palavras(texto)
             melhor, nota = None, 0.0
             for s in slides:
-                if s.get("referencias"):
-                    continue
                 r = SequenceMatcher(None, tit, _norm(s["titulo"])).ratio() if tit and s["titulo"] else 0.0
                 j = len(pal & s["palavras"]) / max(1, len(s["palavras"])) if s["palavras"] else 0.0
                 n = max(r, 0.6 * r + 0.4 * j)
@@ -177,7 +144,7 @@ def casar_regras(falas: list[Cue], ini: float, fim: float, slides: list[dict], j
     out = []
     for s in slides:
         alvo = s["palavras"]
-        if s.get("referencias") or len(alvo) < 2:
+        if len(alvo) < 2:
             continue
         melhor, nota = None, 0.0
         for i, c in enumerate(trecho):
@@ -339,14 +306,9 @@ def aplicar(arquivo: Path, nome_seq: str, itens: list[dict], formato: str, coloc
             novos.append(c)
             cont["n_slides"] += 1
         else:
-            rot = rotulo(it["texto"])
-            if rot == "CARTELA":
-                marcas.append(_marcador("CARTELA", a, b, "Sem slide do professor para esta inserção — criar a cartela. "
-                                        + it["texto"][:400]))
-                cont["n_cartelas"] += 1
-            else:
-                marcas.append(_marcador(rot, a, b, it["texto"][:400]))
-                cont["n_palavras"] = cont.get("n_palavras", 0) + 1
+            marcas.append(_marcador("CARTELA", a, b, "Sem slide do professor para esta inserção — criar a cartela. "
+                                    + it["texto"][:400]))
+            cont["n_cartelas"] += 1
     _gravar(root, arquivo, seq, faixa, novos, marcas)
     return cont
 

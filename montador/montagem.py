@@ -295,7 +295,7 @@ def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: st
             cues = falas.get(tr["video"]) or []
             if not cues:
                 continue
-            mk = [c for lista in (marcas.get(tr["video"]) or {}).values() if skoopia.tipo(lista) != "aulas" for c in lista]
+            mk = [c for lista in (marcas.get(tr["video"]) or {}).values() for c in lista]
             plano = plano_skoopia(cues, mk, tr["ini"], tr["fim"]) if usar_skoopia else plano_regras(cues, tr["ini"], tr["fim"])
             planos[(a["n"], k)] = plano
             if not com_slides:
@@ -380,7 +380,6 @@ def _relatorio(dia, formato, insercao, usar_skoopia, resultados, avisos, destino
                       f"{r['n_bastidores']} bastidores, {r['n_silencio']} silêncio(s), {r['n_conferir']} a conferir"
                       + (f" · {r.get('n_slides', 0)} slide(s)" if r.get("n_slides") else "")
                       + (f" · {r['n_cartelas']} cartela(s) a criar" if r.get("n_cartelas") else "")
-                      + (f" · {r['n_palavras']} palavra(s)-chave/tarja(s) marcada(s)" if r.get("n_palavras") else "")
                       + (f" · {r['n_tela']} tela(s) cheia(s)" if r.get("n_tela") else "")
                       + (f" · {r['efeitos_removidos']} efeito(s) removido(s)" if r["efeitos_removidos"] else ""))
     linhas += [""] + [f"Aviso: {a}" for a in avisos]
