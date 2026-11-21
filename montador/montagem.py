@@ -3,7 +3,7 @@
 Usa os geradores do Fluxo NPD (pasta motor/) com as regras de montagem de sempre e acrescenta o que é do
 Montador:
   - cortes da Skoopia (ou das regras sem IA) já planejados para o trecho de cada aula;
-  - aula em mais de um vídeo: uma sequência por trecho ("03 Título" e "03 Título (parte 2)");
+  - aula em mais de um vídeo: as partes viram uma sequência só, com o marcador TROCA DE VÍDEO na emenda;
   - pós-processo: nome "01 Título", tipo de cada marcação (ERRO, BASTIDORES, A CONFERIR, SILÊNCIO) com a cor
     das Configurações, nenhum efeito (Lumetri, Desfoque gaussiano) e os arquivos de vinheta/brasão/fundos desta máquina.
 Nada é apagado: tudo entra cortado nos limites, com cor e marcador.
@@ -330,7 +330,8 @@ def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: st
                     if not cues:
                         raise ErroMontagem("sem transcrição")
                     plano = planos[(a["n"], k)]
-                    saida = (tmp / "aulas" if juntar else destino) / f"{_nome_arquivo(nome)}.xml"
+                    pasta_saida = tmp / "partes" if len(partes) > 1 else (tmp / "aulas" if juntar else destino)
+                    saida = pasta_saida / f"{_nome_arquivo(nome)}.xml"
                     saida.parent.mkdir(exist_ok=True)
                     log = _gerar(formato, insercao, v, cues, plano, dia["raiz"], a["n"], nome, saida, tmp,
                                  pptx[0] if pptx else None, (tr["ini"], tr["fim"]))
@@ -348,11 +349,37 @@ def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: st
                     item["erro"] = str(e)
                     avisos.append(f"{nome}: {e}")
                 resultados.append(item)
-                if len(partes) > 1 and k == 1:
-                    avisos.append(f"{a['nome']}: a aula está em {len(partes)} vídeos e saiu em {len(partes)} sequências "
-                                  "— junte as partes na timeline")
+            if len(partes) > 1:
+                # a aula passa por mais de um vídeo: as partes viram uma sequência só
+                dela = resultados[-len(partes):]
+                if all(r["arquivo"] for r in dela):
+                    from .juntar import juntar_partes
+                    alvo = (tmp / "aulas" if juntar else destino) / f"{_nome_arquivo(a['nome'])}.xml"
+                    alvo.parent.mkdir(exist_ok=True)
+                    try:
+                        juntar_partes([Path(r["arquivo"]) for r in dela], alvo, a["nome"])
+                        for r in dela:
+                            r["arquivo"] = str(alvo)
+                        avisos.append(f"{a['nome']}: a aula está em {len(partes)} vídeos — juntei numa sequência só "
+                                      "(marcador TROCA DE VÍDEO na emenda)")
+                    except (ValueError, OSError, ET.ParseError) as e:
+                        for r in dela:
+                            sep = (tmp / "aulas" if juntar else Path(destino)) / Path(r["arquivo"]).name
+                            sep.parent.mkdir(exist_ok=True)
+                            sep.write_bytes(Path(r["arquivo"]).read_bytes())
+                            r["arquivo"] = str(sep)
+                        avisos.append(f"{a['nome']}: não consegui juntar as {len(partes)} partes ({e}); "
+                                      "saíram separadas — junte na timeline")
+                else:
+                    for r in dela:
+                        if r["arquivo"]:
+                            sep = (tmp / "aulas" if juntar else Path(destino)) / Path(r["arquivo"]).name
+                            sep.parent.mkdir(exist_ok=True)
+                            sep.write_bytes(Path(r["arquivo"]).read_bytes())
+                            r["arquivo"] = str(sep)
+                    avisos.append(f"{a['nome']}: uma das partes deu erro; as outras saíram separadas")
         unico = None
-        prontos = [Path(r["arquivo"]) for r in resultados if r["arquivo"]]
+        prontos = list(dict.fromkeys(Path(r["arquivo"]) for r in resultados if r["arquivo"]))
         if juntar and prontos:
             from .juntar import juntar as _juntar
             unico = destino / f"{_nome_arquivo(dia['nome'])} - aulas.xml"

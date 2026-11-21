@@ -70,7 +70,22 @@ def test_aula_em_dois_videos_sai_em_duas_partes(dia_teste):
     r = montagem.montar(d, falas, aulas, "TV", "nenhuma", {}, tmp / "out", modo="regras")
     nomes = [x["nome"] for x in r["resultados"]]
     assert nomes[:2] == ["01 Um", "01 Um (parte 2)"]
-    assert any("2 vídeos" in a for a in r["avisos"])
+    assert any("2 vídeos" in a and "sequência só" in a for a in r["avisos"])
+    # as duas partes viram uma sequência só, uma depois da outra
+    assert r["resultados"][0]["arquivo"] == r["resultados"][1]["arquivo"]
+    root = ET.parse(r["resultados"][0]["arquivo"]).getroot()
+    seqs = root.find("project/children").findall("sequence")
+    assert [s.findtext("name") for s in seqs] == ["01 Um"]
+    seq = seqs[0]
+    cam = sorted((int(c.findtext("start")), int(c.findtext("end")), c.findtext("name"))
+                 for c in seq.findall("media/video/track")[1].findall("clipitem"))
+    assert len({n[:19] for _, _, n in cam}) == 2                       # as duas gravações
+    assert all(a[1] == b[0] for a, b in zip(cam, cam[1:]))             # sem buraco na emenda
+    nomes_m = [m.findtext("name") for m in seq.findall("marker")]
+    assert "TROCA DE VÍDEO" in nomes_m and sum(n.lower().startswith("lower third") for n in nomes_m) == 1
+    creditos = [c for t in seq.iter("track") for c in t.findall("clipitem") if "creditos" in (c.findtext("name") or "")]
+    assert len(creditos) == 1 and int(creditos[0].findtext("start")) >= cam[-1][1] - 60
+    assert sorted(p.name for p in (tmp / "out").glob("*.xml")) == ["01 Um.xml", "02 Tres.xml", "03 Quatro.xml"]
 
 
 def test_assets_da_maquina(dia_teste):
