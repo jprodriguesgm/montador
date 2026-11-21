@@ -1,51 +1,102 @@
 # Montador
 
-Monta as sequências das videoaulas do Núcleo de Produção Digital (PUC Minas / IEC) no Premiere a partir da transcrição, das marcações da IA (ou das regras sem IA) e do material de inserção.
+App que monta as sequências das videoaulas no Premiere. A partir da pasta do dia da gravação, ele separa
+as aulas (mapa do dia), marca erros e bastidores (pela **Skoopia** ou pelas regras do Fluxo NPD, sem IA),
+coloca os slides do professor nos pontos de inserção e entrega um XML pronto para importar no Premiere,
+nos formatos **TP**, **TP com palavra-chave**, **TV** e **Screencast**. No fim, gera as **thumbs** das aulas
+no padrão da equipe. Nada é apagado: os cortes entram como marcadores, e quem decide é o editor.
 
-O desenho completo está em [DESENHO.md](DESENHO.md). Como instalar: [INSTALAR.md](INSTALAR.md).
+Feito no Núcleo de Produção Digital da PUC Minas para o fluxo de videoaulas da pós-graduação. Substitui o
+Fluxo NPD.
 
-Baixar (versão oficial mais nova): [Mac](https://github.com/jprodriguesgm/montador/releases/latest/download/Montador-mac.zip) · [Windows](https://github.com/jprodriguesgm/montador/releases/latest/download/Montador-windows.zip). Versões de teste ficam em [Releases](https://github.com/jprodriguesgm/montador/releases).
+![Tela do Montador](docs/guia/00-tela.png)
 
-## Estado
+## Baixar
 
-- **Etapa 1 (base):** configurações deste computador (arquivos dos projetos, como o Link Media), pasta do dia, cartão (títulos grudados), mapa do dia (aulas, takes descartados, trechos) e importação à mão de transcrições, SRTs da Skoopia e material.
-- **Etapa 2 (montagem):** um XML por aula para o Premiere 25, nos formatos TP, TP com palavra-chave, TV e Screencast. Usa os geradores do Fluxo NPD (pasta `montador/motor`), com:
-  - marcações da Skoopia (ERRO, BASTIDORES) ou as regras do Fluxo NPD (sem IA), mais SILÊNCIO detectado pelo app;
-  - cor de cada tipo de marcação pelas Configurações; nada é apagado;
-  - sequências "01 Título"; aula em dois vídeos sai em duas partes;
-  - sem efeitos (Lumetri e Desfoque gaussiano saem); vinheta, brasão e fundos com os caminhos desta máquina;
-  - relatório de uso ao lado dos XMLs.
-- **Etapa 3 (slides e inserções):**
-  - o .pptx do professor vira JPEG 1920x1080 (qualidade 95) em `Originais/<nome do pptx>/` — pelo LibreOffice, ou pelo Keynote no Mac sem LibreOffice; imagens já prontas nessa pasta são usadas como estão;
-  - com a Skoopia, cada inserção é ligada ao slide pelo código da cartela (C33) ou pelo título; sem IA, pelo assunto do slide na fala (para conferir);
-  - TP: o slide entra na V7 pelo tempo da nota do slide ("Exibir por 6 a 8 segundos" → 8 s) ou 15 s (Configurações), com marcador "SLIDE C33"; inserção sem slide vira marcador "CARTELA" com o texto;
-  - TV: no ponto de inserção, a exibição (D) entra em tela cheia numa faixa nova por cima, com marcador "TELA CHEIA";
-  - Screencast: só cortes.
-- **Etapa 4 (app):** ícone, app de Mac (Apple Silicon, macOS 11+) e Windows montado pelo GitHub Actions (aba Actions → "Montar o app" → Run workflow), com o LibreOffice e as fontes (Montserrat, Poppins, Carlito) dentro. Sem versão oficial = "Montagem N (teste)"; com versão (1.0.0) = oficial no link "latest". O ícone sai de `tools/fazer_icone.py`.
-- **Thumbs:** depois de montar, "Gerar thumbs" abre as thumbs das aulas no padrão do gerador da equipe (mesma fonte, artes Default/Libras, regra de tamanho da letra e barras `\\` e `//`, `[[ ]]`). Confirmando, salva PNG 1920x1080 em `<dia>/Saída` com o nome das sequências. A fonte (licenciada) e as artes vêm do `index.html` do gerador, apontado em Configurações → Thumbs; não vão para o repositório. Usa o html2canvas (MIT).
-- **Um XML só (padrão):** todas as aulas do dia num arquivo `<dia> - aulas.xml`; cada aula continua uma sequência, e vídeos, vinheta, créditos, fundos e slides entram uma vez só no projeto. Dá para desmarcar no Montar e voltar a um XML por aula.
+| | Link direto (sempre a versão oficial mais nova) |
+|---|---|
+| **Mac** (chip Apple M1 ou mais novo, macOS 11+) | [Montador-mac.zip](https://github.com/jprodriguesgm/montador/releases/latest/download/Montador-mac.zip) |
+| **Windows** 10/11 (64 bits) | [Montador-windows.zip](https://github.com/jprodriguesgm/montador/releases/latest/download/Montador-windows.zip) |
 
-No modo sem IA, o Montador gera exatamente o mesmo XML que o Fluxo NPD (conferido com `tools/comparar_fluxo.py`), mudando só o nome da sequência, o nome do marcador e a remoção do Lumetri e do Desfoque gaussiano.
+**Como instalar e usar: [GUIA.md](GUIA.md)** (passo a passo com imagens).
 
-## Testar no Mac (antes do app empacotado)
+Todas as versões: [Releases](https://github.com/jprodriguesgm/montador/releases). Versões
+"Montagem N (teste)" são de teste; a oficial é a marcada como **Latest**.
 
-1. **Code > Download ZIP** nesta página e descompacte.
-2. Dois cliques em **Abrir Montador.command**. Se o Mac bloquear: no Terminal, `xattr -dr com.apple.quarantine` e arraste a pasta.
-3. A janela abre no navegador (`http://127.0.0.1:8767`). Ela fecha sozinha alguns minutos depois que a página é fechada.
+## Para a TI: privacidade e segurança
 
-Pelo Terminal também dá para ver o mapa sugerido de uma pasta:
+- **Nada sai do computador.** O app abre um servidor local que só escuta em `127.0.0.1` e mostra a tela
+  no navegador. Vídeos, transcrições, slides e SRTs são lidos no próprio computador.
+- **Sem internet e sem IA online no app.** A Skoopia é usada à parte, pela equipe; o Montador só lê os
+  SRTs que ela devolve. Sem a Skoopia, ele marca pelas regras do Fluxo NPD.
+- **Não pede administrador e não instala nada no sistema.** O LibreOffice (para converter os slides) e as
+  fontes vão dentro do app. As configurações ficam numa pasta do usuário:
+  `~/Library/Application Support/Montador` (Mac) ou `%APPDATA%\Montador` (Windows).
+- **O app não tem assinatura da Apple nem da Microsoft.** Por isso o Mac pede o comando `xattr` na
+  primeira abertura e o Windows mostra "O Windows protegeu o computador". O app do Windows não usa o
+  PowerShell.
+- **Montagem rastreável.** Cada versão é montada pelo GitHub Actions a partir deste código
+  ([.github/workflows/montar.yml](.github/workflows/montar.yml)), com testes e diagnóstico publicados na
+  página de cada versão. O LibreOffice vem do site oficial e as fontes, dos repositórios oficiais
+  ([packaging/build_deps.py](packaging/build_deps.py)).
+- O repositório guarda **só código**: nenhum vídeo, transcrição real, slide de professor ou fonte
+  licenciada. Os dados de teste são fictícios.
 
-```bash
-python3 -m montador mapa "/caminho/da/pasta do dia"
-```
+## Licença
 
-## Testes
+Copyright (C) 2026 João Paulo Rodrigues.
 
-```bash
-python3 -m pytest -q tests
-```
+Software livre: você pode redistribuir e modificar sob os termos da **GNU General Public License,
+versão 3 ou posterior** ([LICENSE](LICENSE)). Sem garantia de qualquer tipo.
+Os programas e dados de terceiros que vão dentro do app e as licenças de cada um estão em
+[LICENCAS-DE-TERCEIROS.md](LICENCAS-DE-TERCEIROS.md).
 
-### Ajustes 0.2.1
-- Cortes e inserções da Skoopia feitos a partir do SRT único são divididos sozinhos por vídeo, mesmo sem a tabela: o Montador refaz a posição de cada vídeo dentro do SRT único e confere pelas falas citadas.
-- Duração dos vídeos do OBS (MP4 fragmentado) lida pelo cabeçalho ou, se faltar, pelo ffprobe.
-- Material: escolher vários arquivos de uma vez, tirar qualquer arquivo da lista (✕) e voltar a usar ("usar"). Arquivos que começam com "TP" (teleprompter) ficam fora por padrão.
+## Para quem programa
+
+Python (biblioteca padrão) + Pillow e pypdfium2; tela em HTML/CSS/JS puro servida pelo próprio Python. Os
+geradores de XML do Fluxo NPD ficam em `montador/motor` e rodam dentro do app. As decisões do projeto
+estão em [DESENHO.md](DESENHO.md).
+
+| Parte | Onde |
+|---|---|
+| Pasta do dia, transcrições, material | `montador/dia.py` |
+| Cartão (títulos, formato, inserção) | `montador/cartao.py` |
+| Mapa do dia (aulas, takes, trechos) | `montador/mapa.py` |
+| SRTs da Skoopia (cortes, inserções, SRT único) | `montador/skoopia.py` |
+| Montagem (geradores, pós-processo, relatório) | `montador/montagem.py` |
+| Slides (.pptx → JPEG) e inserções na timeline | `montador/slides.py`, `montador/insercoes.py` |
+| XML único do dia e aula em mais de um vídeo | `montador/juntar.py` |
+| Thumbs (padrão do gerador da equipe) | `montador/thumbs.py`, `montador/ui/thumbs.js` |
+| Servidor e tela | `montador/server.py`, `montador/ui/` |
+
+### O que precisa
+- Python 3.10+ com `Pillow` e `pypdfium2` (`requirements.txt`).
+- LibreOffice para converter os slides (no app, vai dentro; para testar, o do sistema serve; no Mac sem
+  LibreOffice, o Keynote).
+- Só para os testes: `pytest` e `python-pptx`.
+
+### Abrir pelo código
+    python3 -m montador                          # abre a tela no navegador (servidor só em 127.0.0.1:8767)
+    python3 -m montador abrir --sem-navegador --porta 8767
+    python3 -m montador mapa "/caminho/da/pasta do dia"   # mapa sugerido, no Terminal
+No Mac, dois cliques em `Abrir Montador.command`. As configurações ficam em
+`~/Library/Application Support/Montador` (Mac) ou `%APPDATA%\Montador` (Windows); a variável
+`MONTADOR_HOME` troca essa pasta.
+
+### Montar o app
+GitHub → aba **Actions** → "Montar o app" → **Run workflow**. Com o campo **Versão oficial** vazio sai uma
+versão de **teste** ("Montagem N (teste)", pré-lançamento). Com `1.1.0` no campo (ou uma etiqueta `v1.1.0`)
+sai a versão **oficial**, que o link `releases/latest` entrega. Os zips têm nome fixo: `Montador-mac.zip` e
+`Montador-windows.zip`. Para limpar as versões de teste: Actions → "Arquivar versões de teste".
+Na mão (no próprio sistema):
+
+    python packaging/build_deps.py      # fontes/ e bin/ (LibreOffice)
+    pip install -r requirements.txt pyinstaller
+    pyinstaller --noconfirm packaging/montador.spec      # dist/
+
+`Montador diagnostico [slides.pptx]` confere se tudo está dentro do app. O ícone sai de
+`tools/fazer_icone.py`.
+
+### Testar
+    python3 -m pytest -q tests
+    python3 tools/comparar_fluxo.py      # modo sem IA: mesmo XML que o Fluxo NPD

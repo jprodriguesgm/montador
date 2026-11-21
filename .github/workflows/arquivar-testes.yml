@@ -1,0 +1,36 @@
+# Apaga as versões de teste ("Montagem N (teste)", pré-lançamento) e as etiquetas delas.
+# As versões oficiais não são tocadas. O código de cada teste continua no histórico do repositório.
+name: Arquivar versões de teste
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Digite APAGAR para apagar as versões de teste'
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  arquivar:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Apagar os pré-lançamentos "montagem-N"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CONFIRMAR: ${{ inputs.confirmar }}
+        run: |
+          if [ "$CONFIRMAR" != "APAGAR" ]; then
+            echo "::error title=Nada foi apagado::Digite APAGAR no campo para confirmar."
+            exit 1
+          fi
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+            --jq '.[] | select(.prerelease and (.tag_name | startswith("montagem-"))) | .tag_name' > testes.txt
+          echo "Versões de teste: $(wc -l < testes.txt)"
+          while read -r tag; do
+            [ -n "$tag" ] || continue
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag && echo "apagada: $tag"
+          done < testes.txt
+          echo "::notice title=Arquivado::$(wc -l < testes.txt) versão(ões) de teste apagadas: $(tr '\n' ' ' < testes.txt)"
