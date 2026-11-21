@@ -494,13 +494,65 @@ def _porta_livre(porta: int) -> bool:
         return s.connect_ex(("127.0.0.1", porta)) != 0
 
 
+def _versao_aberta(porta: int) -> str | None:
+    import json as _json
+    import urllib.request
+    try:
+        op = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with op.open(f"http://127.0.0.1:{porta}/api/estado", timeout=3) as r:
+            return _json.loads(r.read().decode("utf-8")).get("versao")
+    except Exception:          # noqa: BLE001
+        return None
+
+
+def _encerrar(porta: int, espera: float = 10.0) -> bool:
+    """Pede para o Montador que está aberto nessa porta se fechar; True se a porta ficou livre."""
+    import urllib.request
+    try:
+        op = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        op.open(urllib.request.Request(f"http://127.0.0.1:{porta}/api/sair", data=b"{}", method="POST",
+                                       headers={"Content-Type": "application/json"}), timeout=3).read()
+    except Exception:          # noqa: BLE001
+        return False
+    fim = time.time() + espera
+    while time.time() < fim:
+        if _porta_livre(porta):
+            return True
+        time.sleep(0.3)
+    return False
+
+
+def _precarregar():
+    """Carrega já o que os geradores usam: se o app for trocado por uma versão nova com ele aberto,
+    o que ainda não estava carregado quebraria ("Error -3 while decompressing data")."""
+    import importlib
+    for m in ("copy", "difflib", "html", "json", "math", "unicodedata", "urllib.parse", "uuid", "xml.etree.ElementTree",
+              "zipfile", "zlib", "runpy", "tempfile", "subprocess", "shutil", "PIL.Image", "PIL.ImageDraw", "PIL.ImageFont",
+              "PIL.ImageFilter", "pypdfium2", "montador.montagem", "montador.insercoes", "montador.slides",
+              "montador.juntar", "montador.thumbs", "montador.skoopia", "montador.mapa"):
+        try:
+            importlib.import_module(m)
+        except Exception:      # noqa: BLE001
+            pass
+
+
 def serve(porta: int | None = None, abrir_navegador: bool = True, fechar_sozinho: bool = False):
     porta = porta or PORTA_PADRAO
     url = f"http://127.0.0.1:{porta}/"
-    if not _porta_livre(porta):            # já está aberto: só abre a janela
-        if abrir_navegador:
-            webbrowser.open(url)
-        return
+    if not _porta_livre(porta):
+        aberta = _versao_aberta(porta)
+        if aberta == __version__ or aberta is None and not _encerrar(porta):
+            if abrir_navegador:                # já está aberto (a mesma versão): só abre a janela
+                webbrowser.open(url)
+            return
+        # outra versão ainda aberta (o app foi atualizado com ele aberto): fecha a antiga e abre esta
+        if aberta is not None:
+            _encerrar(porta)
+        if not _porta_livre(porta):
+            if abrir_navegador:
+                webbrowser.open(url)
+            return
+    _precarregar()
     srv = ThreadingHTTPServer(("127.0.0.1", porta), Handler)
     print(f"Montador {__version__} em {url}")
     if abrir_navegador:
