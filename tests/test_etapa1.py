@@ -246,7 +246,7 @@ def test_configuracoes_e_procura_de_assets(tmp_path):
     achados = appdata.procurar_assets(base / "Identidade/Saida/Final_cima_v4_mov.mov", niveis_acima=2)
     assert {"vinheta", "brasao", "creditos", "vignette", "hex"} <= set(achados)
     cfg = appdata.salvar({"assets": achados, "cores": {"erro": "Red"}})
-    assert cfg["cores"] == {"erro": "Red", "bastidores": "Mango", "conferir": "Violet"}
+    assert cfg["cores"] == {"erro": "Red", "bastidores": "Mango", "conferir": "Violet", "script": "Cerulean"}
     est = {a["id"]: a["ok"] for a in appdata.estado_assets()}
     assert est["vinheta"] and not est["marinho"]
 

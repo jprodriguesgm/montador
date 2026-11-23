@@ -57,8 +57,10 @@ def plano_regras(cues: list[Cue], ini: float, fim: float) -> dict:
     return {"T0": t0, "T1": t1, "trechos": trechos, "fonte": "regras"}
 
 
-def plano_skoopia(cues: list[Cue], marcas: list[Cue], ini: float, fim: float) -> dict:
-    """Modo Skoopia: início e fim pela fala (regras), cortes pelas marcações dela, silêncios longos pelo app."""
+def plano_skoopia(cues: list[Cue], marcas: list[Cue], ini: float, fim: float, com_script: bool = False) -> dict:
+    """Modo Skoopia: início e fim pela fala (regras), cortes pelas marcações dela, silêncios longos pelo app.
+
+    com_script: o que as regras sem IA acharam e a Skoopia não marcou entra como "PODE SER UM ERRO" (outra cor)."""
     base = plano_regras(cues, ini, fim)
     t0, t1 = base["T0"], base["T1"]
     trechos = []
@@ -85,6 +87,16 @@ def plano_skoopia(cues: list[Cue], marcas: list[Cue], ini: float, fim: float) ->
                 junto[-1][3] += " + " + m
         else:
             junto.append([a, b, t, m])
+    if com_script:
+        extra = []
+        for a, b, t, m in base["trechos"]:
+            if t != "erro" or b - a < 0.5:
+                continue
+            if any(a < y - 0.05 and b > x + 0.05 for x, y, _, _ in junto):
+                continue                                   # a Skoopia já marcou esse pedaço
+            motivo = re.sub(r"^\[ERRO\]\s*", "", m).strip() or "achado pelas regras"
+            extra.append([a, b, "erro", f"[SCRIPT] {motivo}"])
+        junto = sorted(junto + extra)
     # TV e screencast esperam a aula inteira dividida em trechos: o que não é marcação vira trecho "ok"
     cheio, cursor = [], t0
     for a, b, t, m in junto:
@@ -167,7 +179,9 @@ def _gerar(formato: str, insercao: str, video: dict, cues: list[Cue], plano: dic
 # ------------------------------------------------------------------ pós-processo
 
 _CLASSES = {"ERRO": ("erro", "ERRO"), "BASTIDORES": ("bastidores", "BASTIDORES"),
-            "SILÊNCIO": ("conferir", "SILÊNCIO"), "CONFERIR": ("conferir", "A CONFERIR")}
+            "SILÊNCIO": ("conferir", "SILÊNCIO"), "CONFERIR": ("conferir", "A CONFERIR"),
+            "SCRIPT": ("script", "PODE SER UM ERRO")}
+_PADRAO_CORES = appdata.DEFAULTS["cores"]
 
 
 def _url(caminho: str) -> str:
@@ -186,7 +200,7 @@ def pos_processar(arquivo: Path, nome_seq: str, cfg: dict) -> dict:
     texto = arquivo.read_text(encoding="utf-8")
     root = ET.fromstring(texto.split("\n", 2)[2] if texto.startswith("<?xml") else texto)
     cores = cfg.get("cores") or {}
-    cont = {"n_erro": 0, "n_bastidores": 0, "n_silencio": 0, "n_conferir": 0, "efeitos_removidos": 0}
+    cont = {"n_erro": 0, "n_bastidores": 0, "n_silencio": 0, "n_conferir": 0, "n_script": 0, "efeitos_removidos": 0}
 
     # sem efeitos: cor (Lumetri) e desfoque gaussiano saem; ficam só movimento, corte, opacidade e áudio
     for pai in root.iter():
@@ -229,14 +243,14 @@ def pos_processar(arquivo: Path, nome_seq: str, cfg: dict) -> dict:
                 continue
             com = m.find("comment")
             txt = (com.text or "") if com is not None else ""
-            k = re.search(r"\[(ERRO|BASTIDORES|SILÊNCIO|CONFERIR)\]\s*", txt, re.I)
+            k = re.search(r"\[(ERRO|BASTIDORES|SILÊNCIO|CONFERIR|SCRIPT)\]\s*", txt, re.I)
             classe = k.group(1).upper() if k else "ERRO"
             cor_chave, rotulo = _CLASSES.get(classe, ("erro", "ERRO"))
             m.find("name").text = rotulo
             if com is not None and k:
                 com.text = re.sub(r"^Possível erro \(nada foi apagado\):\s*", "", txt[:k.start()] + txt[k.end():]).strip()
-            faixas[(m.findtext("in"), m.findtext("out"))] = cores.get(cor_chave)
-            cont["n_" + {"ERRO": "erro", "BASTIDORES": "bastidores", "SILÊNCIO": "silencio"}.get(classe, "conferir")] += 1
+            faixas[(m.findtext("in"), m.findtext("out"))] = cores.get(cor_chave) or _PADRAO_CORES.get(cor_chave)
+            cont["n_" + {"ERRO": "erro", "BASTIDORES": "bastidores", "SILÊNCIO": "silencio", "SCRIPT": "script"}.get(classe, "conferir")] += 1
         for c in seq.iter("clipitem"):
             cor = faixas.get((c.findtext("start"), c.findtext("end")))
             if cor:
@@ -255,7 +269,8 @@ def _nome_arquivo(nome: str) -> str:
 
 
 def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: str, marcas: dict,
-           destino: str | Path, cfg: dict | None = None, modo: str = "auto", juntar: bool = False) -> dict:
+           destino: str | Path, cfg: dict | None = None, modo: str = "auto", juntar: bool = False,
+           com_script: bool | None = None) -> dict:
     """Gera um XML por aula (por trecho, quando a aula está em mais de um vídeo) — ou um XML só com todas."""
     cfg = cfg or appdata.carregar()
     destino = Path(destino)
@@ -263,6 +278,8 @@ def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: st
     videos = {v["nome"]: v for v in dia["videos"]}
     pptx = (dia.get("material") or {}).get("pptx") or []
     usar_skoopia = modo == "skoopia" or (modo == "auto" and any(marcas.values()))
+    if com_script is None:
+        com_script = bool(cfg.get("script_com_skoopia", True))
     resultados, avisos = [], []
     padrao = float(cfg.get("duracao_slide") or insercoes.DURACAO_PADRAO)
 
@@ -296,7 +313,7 @@ def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: st
             if not cues:
                 continue
             mk = [c for lista in (marcas.get(tr["video"]) or {}).values() for c in lista]
-            plano = plano_skoopia(cues, mk, tr["ini"], tr["fim"]) if usar_skoopia else plano_regras(cues, tr["ini"], tr["fim"])
+            plano = plano_skoopia(cues, mk, tr["ini"], tr["fim"], com_script) if usar_skoopia else plano_regras(cues, tr["ini"], tr["fim"])
             planos[(a["n"], k)] = plano
             if not com_slides:
                 continue
@@ -387,24 +404,25 @@ def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: st
             for r in resultados:
                 if r["arquivo"]:
                     r["arquivo"] = str(unico)
-    rel = _relatorio(dia, formato, insercao, usar_skoopia, resultados, avisos, destino)
+    rel = _relatorio(dia, formato, insercao, usar_skoopia, resultados, avisos, destino, usar_skoopia and com_script)
     return {"resultados": resultados, "avisos": avisos, "relatorio": str(rel), "destino": str(destino),
             "modo": "skoopia" if usar_skoopia else "regras", "unico": str(unico) if unico else None}
 
 
-def _relatorio(dia, formato, insercao, usar_skoopia, resultados, avisos, destino: Path) -> Path:
+def _relatorio(dia, formato, insercao, usar_skoopia, resultados, avisos, destino: Path, com_script: bool = False) -> Path:
     """Relatório de uso, ao lado dos XMLs (para mandar junto quando algo der errado)."""
     agora = time.strftime("%Y-%m-%d %H%M")
     p = destino / f"Montador - relatório {agora}.txt"
     linhas = [f"Montador {__version__} · {agora}", f"Dia: {dia['curso']} / {dia['nome']}",
               f"Formato: {formato}" + (f" · inserção: {insercao}" if formato in ("TP", "TV") else ""),
-              f"Marcações: {'Skoopia' if usar_skoopia else 'regras do Fluxo NPD (sem IA)'}", ""]
+              f"Marcações: {'Skoopia' + (' + regras (PODE SER UM ERRO)' if com_script else '') if usar_skoopia else 'regras do Fluxo NPD (sem IA)'}", ""]
     for r in resultados:
         if r["erro"]:
             linhas.append(f"{r['nome']}: NÃO GERADO ({r['erro']})")
             continue
         linhas.append(f"{r['nome']} · {r['video']} de {r['T0']:.1f} a {r['T1']:.1f} s · {r['n_erro']} erro(s), "
                       f"{r['n_bastidores']} bastidores, {r['n_silencio']} silêncio(s), {r['n_conferir']} a conferir"
+                      + (f" · {r['n_script']} pode(m) ser erro (regras)" if r.get("n_script") else "")
                       + (f" · {r.get('n_slides', 0)} slide(s)" if r.get("n_slides") else "")
                       + (f" · {r['n_cartelas']} cartela(s) a criar" if r.get("n_cartelas") else "")
                       + (f" · {r['n_tela']} tela(s) cheia(s)" if r.get("n_tela") else "")

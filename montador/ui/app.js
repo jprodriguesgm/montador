@@ -77,7 +77,7 @@ function renderConfig() {
     </div>`).join("");
   $("listaAssets").querySelectorAll("[data-asset]").forEach((b) => (b.onclick = () => apontarAsset(b.dataset.asset)));
   $("cfgGravacoes").value = config.pasta_gravacoes || "";
-  for (const [id, chave] of [["corErro", "erro"], ["corBastidores", "bastidores"], ["corConferir", "conferir"]]) {
+  for (const [id, chave] of [["corErro", "erro"], ["corBastidores", "bastidores"], ["corConferir", "conferir"], ["corScript", "script"]]) {
     $(id).innerHTML = cores_premiere.map((c) => `<option ${c === config.cores[chave] ? "selected" : ""}>${c}</option>`).join("");
     $(id).onchange = () => salvarConfig({ cores: { [chave]: $(id).value } });
   }
@@ -283,6 +283,7 @@ function abrirMontar() {
     + ($("formato").value === "TP" ? " Os slides entram na próxima versão (etapa 3)." : "");
   $("montarAntes").classList.remove("hidden"); $("montarDepois").classList.add("hidden");
   $("montarJuntar").checked = S.estado.config.juntar_xml !== false;
+  $("montarScript").checked = S.estado.config.script_com_skoopia !== false;
   $("montarThumbs").classList.add("hidden");
   $("montarIr").classList.remove("hidden"); $("montarAbrir").classList.add("hidden");
   $("modalMontar").classList.remove("hidden");
@@ -292,13 +293,15 @@ async function montarAgora() {
   $("montarIr").textContent = "Montando…";
   try {
     const r = await api("/api/montar", { faixas: S.faixas, titulos: S.titulos, formato: $("formato").value,
-      insercao: $("insercao").value, destino: $("montarDestino").value.trim(), juntar: $("montarJuntar").checked });
+      insercao: $("insercao").value, destino: $("montarDestino").value.trim(), juntar: $("montarJuntar").checked,
+      script: $("montarScript").checked });
     S.estado.config.juntar_xml = $("montarJuntar").checked;
+    S.estado.config.script_com_skoopia = $("montarScript").checked;
     $("montarLista").innerHTML = r.resultados.map((x) => `
       <div class="arq-linha"><span class="n">${esc(x.nome)}${r.unico ? "" : ".xml"}</span>
         <span class="info ${x.erro ? "pend" : ""}">${x.erro ? "não gerado: " + esc(x.erro)
           : `${x.n_erro} erro(s) · ${x.n_bastidores} bastidores · ${x.n_silencio} silêncio(s)`
-            + (x.n_slides ? ` · ${x.n_slides} slide(s)` : "") + (x.n_cartelas ? ` · ${x.n_cartelas} cartela(s) a criar` : "") + (x.n_tela ? ` · ${x.n_tela} tela(s) cheia(s)` : "")}</span><span></span></div>`).join("");
+            + (x.n_script ? ` · ${x.n_script} pode(m) ser erro` : "") + (x.n_slides ? ` · ${x.n_slides} slide(s)` : "") + (x.n_cartelas ? ` · ${x.n_cartelas} cartela(s) a criar` : "") + (x.n_tela ? ` · ${x.n_tela} tela(s) cheia(s)` : "")}</span><span></span></div>`).join("");
     $("montarAvisos").innerHTML = (r.unico ? `<div class="dica">Tudo em um arquivo: <b>${esc(r.unico.split(/[\\/]/).pop())}</b></div>` : "")
       + r.avisos.map((a) => `<div class="aviso">${esc(a)}</div>`).join("")
       + `<div class="dica">Relatório salvo junto: ${esc(r.relatorio.split(/[\\/]/).pop())}</div>`;

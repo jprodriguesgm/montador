@@ -112,3 +112,23 @@ def test_plano_skoopia_junta_sobrepostos_e_acha_silencio():
     # a aula inteira fica dividida (TV e screencast precisam disso)
     tr = p["trechos"]
     assert tr[0][0] == p["T0"] and tr[-1][1] == p["T1"] and all(a[1] == b[0] for a, b in zip(tr, tr[1:]))
+
+
+
+def test_skoopia_com_script_marca_pode_ser_um_erro_em_outra_cor(dia_teste):
+    from test_script_skoopia import _cues
+    d, falas, m, tmp = dia_teste
+    v = m["aulas"][0]["trechos"][0]["video"]
+    falas = dict(falas, **{v: _cues()})                  # aula curta com uma tentativa repetida que a Skoopia não marcou
+    aulas = [{"n": 1, "nome": "01 Um", "trechos": [{"video": v, "ini": 0.0, "fim": 40.0}]}]
+    for formato in ("TP", "TV", "SCREENCAST"):
+        r = montagem.montar(d, falas, aulas, formato, "nenhuma", {}, tmp / f"out-{formato}", modo="skoopia",
+                            com_script=True)
+        x = r["resultados"][0]
+        assert x["arquivo"] and x["n_script"] > 0, (formato, x)
+        texto = Path(x["arquivo"]).read_text(encoding="utf-8")
+        assert "PODE SER UM ERRO" in texto and "Cerulean" in texto, formato
+        sem = montagem.montar(d, falas, aulas, formato, "nenhuma", {}, tmp / f"sem-{formato}", modo="skoopia",
+                              com_script=False)
+        assert sem["resultados"][0]["n_script"] == 0 and "PODE SER UM ERRO" not in Path(
+            sem["resultados"][0]["arquivo"]).read_text(encoding="utf-8"), formato

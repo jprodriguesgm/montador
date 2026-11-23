@@ -41,9 +41,10 @@ DEFAULTS = {
     "pasta_exportacao": None,       # última pasta onde os XMLs foram salvos (None = pasta Projeto do dia)
     "trello_chave": "",
     "trello_token": "",
-    "cores": {"erro": "Rose", "bastidores": "Mango", "conferir": "Violet"},
+    "cores": {"erro": "Rose", "bastidores": "Mango", "conferir": "Violet", "script": "Cerulean"},
     "marcacoes": "auto",            # auto | skoopia | regras
-    "juntar_xml": True,             # um XML só com todas as aulas (uma importação no Premiere)
+    "juntar_xml": True,
+    "script_com_skoopia": True,     # com a Skoopia, as regras sem IA também procuram erros e marcam "PODE SER UM ERRO"             # um XML só com todas as aulas (uma importação no Premiere)
     "duracao_slide": 15,            # segundos de cada slide na tela quando a nota do slide não diz
     "libreoffice": None,
     "thumb_html": None,             # index.html do gerador de thumbnail da equipe (fonte e artes vêm dele)            # caminho do soffice, se não estiver no lugar de sempre

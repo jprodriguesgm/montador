@@ -114,6 +114,7 @@
       <div class="rotulo">Salvar os XMLs em</div>
       <div class="linha"><input class="campo" id="montarDestino" spellcheck="false"><button class="btn" id="montarTrocar">Trocar pasta</button></div>
       <label class="dica"><input type="checkbox" id="montarJuntar"> Um XML só com todas as aulas (uma importação no Premiere; vinheta e vídeos entram uma vez)</label>
+      <label class="dica"><input type="checkbox" id="montarScript"> Com a Skoopia, usar também o script (regras sem IA): o que só ele achar fica marcado como “PODE SER UM ERRO”, em outra cor, sem cortar nada</label>
       <div class="dica" id="montarResumo"></div>
     </div>
     <div id="montarDepois" class="hidden">
@@ -141,10 +142,11 @@
     <div class="rotulo">Pasta das transcrições <span class="dica">(opcional: quando os .srt não ficam na Footage, o app procura aqui pelo nome do vídeo)</span></div>
     <div class="linha"><input class="campo" id="cfgTrans" spellcheck="false"><button class="btn" id="cfgTransBtn">Escolher</button></div>
     <div class="rotulo">Cores das marcações</div>
-    <div class="grade3">
+    <div class="grade3" style="grid-template-columns:repeat(4,minmax(0,1fr))">
       <label>Erro <select class="campo" id="corErro"></select></label>
       <label>Bastidores <select class="campo" id="corBastidores"></select></label>
       <label>A conferir <select class="campo" id="corConferir"></select></label>
+      <label>Pode ser um erro <select class="campo" id="corScript"></select></label>
     </div>
     <div class="rotulo">Marcações</div>
     <select class="campo" id="cfgMarcacoes">

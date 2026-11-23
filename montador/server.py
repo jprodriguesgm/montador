@@ -350,6 +350,8 @@ def acao_montar(corpo) -> dict:
         appdata.salvar({"pasta_exportacao": corpo["destino"]})
     if "juntar" in corpo:
         appdata.salvar({"juntar_xml": bool(corpo["juntar"])})
+    if "script" in corpo:
+        appdata.salvar({"script_com_skoopia": bool(corpo["script"])})
     # o material é lido de novo agora: o editor pode ter posto slides na pasta depois de abrir o dia
     novo, _ = dia.procurar_material(Path(d["raiz"]), d.get("originais") and Path(d["originais"]))
     with ESTADO.lock:
@@ -358,7 +360,8 @@ def acao_montar(corpo) -> dict:
     try:
         return montagem.montar(dd, falas, m["aulas"], corpo.get("formato") or "TP", corpo.get("insercao") or "slide",
                                marcas, destino, cfg, cfg.get("marcacoes") or "auto",
-                               juntar=bool(corpo["juntar"]) if "juntar" in corpo else bool(cfg.get("juntar_xml", True)))
+                               juntar=bool(corpo["juntar"]) if "juntar" in corpo else bool(cfg.get("juntar_xml", True)),
+                               com_script=bool(corpo["script"]) if "script" in corpo else None)
     except OSError as e:
         raise ApiError(f"Não consegui gravar em {destino}: {e}")
 

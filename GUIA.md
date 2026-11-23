@@ -112,6 +112,9 @@ caminho no campo. O app mostra quantos vídeos, transcrições e se achou o cart
 - **Transcrições:** o app procura os `.srt` do `transcribe` na Footage (de cada vídeo ou o SRT único do
   dia). Se elas estiverem em outra pasta, use **Importar transcrições** ou **Escolher pasta das
   transcrições**, ou arraste os `.srt` para a caixa.
+- **Transcrição master:** se a transcrição foi feita no Premiere, com todos os vídeos do dia colados um
+  depois do outro (na ordem dos nomes), é só pôr o `.srt` na Footage ou importar: o app divide pela
+  duração de cada vídeo. Os SRTs da Skoopia feitos sobre ela também são divididos sozinhos.
 - Vídeo sem transcrição não monta: rode o `transcribe` na pasta antes.
 
 ### Passo 2 — Cartão da gravação
@@ -150,6 +153,10 @@ Arraste para a caixa os SRTs de **cortes** e de **inserções** que a Skoopia de
 
 Sem a Skoopia, deixe a caixa vazia: o app marca erros e bastidores pelas **regras do Fluxo NPD** (sem IA).
 Dá para trocar isso nas Configurações (**Marcações**).
+
+Com a Skoopia, o app pode usar **também o script** (as regras sem IA): o que só ele achar entra como
+**PODE SER UM ERRO**, em outra cor, para o editor conferir. Nada é cortado. Liga e desliga na janela de
+**Montar** (fica lembrado).
 
 ### Passo 5 — Material de inserção
 
@@ -209,6 +216,7 @@ No Premiere: **Arquivo → Importar** o XML. Cada aula vira uma sequência.
 | **BASTIDORES** (Mango) | conversa com a equipe, ajuste, troca de arquivo |
 | **SILÊNCIO** | pausa de 8 s ou mais |
 | **A CONFERIR** (Violet) | o app não teve certeza |
+| **PODE SER UM ERRO** (Cerulean) | com a Skoopia: o script achou e a IA não marcou |
 | **SLIDE C33** | onde entrou um slide (com o porquê no comentário) |
 | **CARTELA** | inserção sem slide do professor: criar a cartela |
 | **TELA CHEIA** (TV) | a tela da TV em tela cheia |
@@ -251,7 +259,7 @@ Engrenagem ⚙ no canto da janela. Tudo fica guardado **neste computador**.
 - **Arquivos dos projetos:** vinheta, créditos, brasão, fundos ([seção 2](#2-primeira-vez-arquivos-do-projeto)).
 - **Pasta das gravações:** onde a janela de escolher a pasta do dia começa.
 - **Pasta das transcrições:** quando os `.srt` não ficam na Footage, o app procura aqui pelo nome do vídeo.
-- **Cores das marcações:** erro, bastidores, a conferir (cores de rótulo do Premiere).
+- **Cores das marcações:** erro, bastidores, a conferir e pode ser um erro (cores de rótulo do Premiere).
 - **Marcações:** Automático (Skoopia se houver SRT, senão regras), Sempre Skoopia ou Sempre sem IA.
 - **Slides:** o LibreOffice usado e o tempo padrão de cada slide na tela.
 - **Thumbs:** o `index.html` do gerador de thumbnail.
