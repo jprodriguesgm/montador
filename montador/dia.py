@@ -112,7 +112,25 @@ def ler(caminho: str | Path) -> dict:
         if t.is_file():
             tabela = _tabela(t)
 
+    master = False
     sem_transcricao = [v["nome"] for v in videos if not v["srt"]]
+    if sem_transcricao and not unico:
+        # transcrição master do Premiere (todos os vídeos colados numa sequência), solta na Footage ou na pasta do dia
+        nomes = {v["nome"].lower() for v in videos}
+        for base in (footage, raiz):
+            for q in sorted(base.glob("*.srt")):
+                if q.stem.lower() in nomes:
+                    continue
+                try:
+                    cues = srt.ler(q)
+                except (OSError, ValueError):
+                    continue
+                if eh_master(cues, videos):
+                    unico, tabela, master = str(q), tabela_colada(videos), True
+                    avisos.append(f"Transcrição master ({q.name}): vídeos colados, divididos pela duração de cada um.")
+                    break
+            if master:
+                break
     if sem_transcricao and not unico:
         avisos.append("Sem transcrição: " + ", ".join(sem_transcricao) + ". Rode o transcribe na pasta.")
 
@@ -136,7 +154,7 @@ def ler(caminho: str | Path) -> dict:
         "raiz": str(raiz), "nome": raiz.name, "curso": raiz.parent.name,
         "footage": str(footage), "originais": str(originais) if originais else None,
         "projeto": str(projeto) if projeto else None, "editado": bool(projeto or saida),
-        "videos": videos, "srt_unico": unico, "tabela": tabela,
+        "videos": videos, "srt_unico": unico, "tabela": tabela, "master": master,
         "material": material, "cartao": cart, "avisos": avisos,
     }
 
@@ -152,6 +170,31 @@ def transcricoes(dia: dict) -> dict[str, list[srt.Cue]]:
         out.update({k: v for k, v in dividir_unico(srt.ler(dia["srt_unico"]), dia.get("tabela") or []).items()
                     if k in faltam})
     return out
+
+
+def tabela_colada(videos: list[dict]) -> list[dict] | None:
+    """Sequência master: os vídeos colados um no outro, na ordem dos nomes (a da gravação), sem espaço.
+
+    Cada vídeo começa onde o anterior termina. Sem a duração de algum vídeo, não dá para saber (None)."""
+    out, ini = [], 0.0
+    for v in sorted(videos, key=lambda x: x["nome"]):
+        if not v.get("duracao"):
+            return None
+        out.append({"video": v["nome"], "separador": ini, "fala": ini})
+        ini += float(v["duracao"])
+    return out
+
+
+def eh_master(cues: list[srt.Cue], videos: list[dict]) -> bool:
+    """Transcrição de uma sequência com todos os vídeos do dia colados (feita no Premiere): passa do fim do
+    vídeo mais longo, não tem separadores [ARQUIVO] e não vai além da soma das durações."""
+    if not cues or srt.separadores(cues) or len(videos) < 2:
+        return False
+    durs = [v.get("duracao") or 0 for v in videos]
+    if not all(durs):
+        return False
+    fim = max(c.fim for c in cues)
+    return fim > max(durs) + 5 and fim <= sum(durs) + 30
 
 
 def dividir_unico(cues: list[srt.Cue], tabela: list[dict]) -> dict[str, list[srt.Cue]]:

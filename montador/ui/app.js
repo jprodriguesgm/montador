@@ -255,7 +255,7 @@ async function importarTranscricoes(corpo) {
     const r = await api("/api/transcricoes", corpo);
     mostrarDia(r);
     const i = r.importacao, partes = [];
-    if (i.videos.length) partes.push(`${i.videos.length} transcrição(ões) ligadas aos vídeos${i.unico ? " (pelo SRT único)" : ""}`);
+    if (i.videos.length) partes.push(`${i.videos.length} transcrição(ões) ligadas aos vídeos${i.unico ? (i.master ? " (pela transcrição master: vídeos colados)" : " (pelo SRT único)") : ""}`);
     if (i.skoopia.length) partes.push(`${i.skoopia.length} SRT(s) da Skoopia: entram na etapa 2`);
     if (i.ignorados.length) partes.push(`não reconheci: ${i.ignorados.slice(0, 4).join(", ")}${i.ignorados.length > 4 ? "…" : ""}`);
     toast(partes.join(" · ") || "Nenhuma transcrição reconhecida.", 7000);

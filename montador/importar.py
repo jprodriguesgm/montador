@@ -44,8 +44,12 @@ def _tabela_texto(texto: str) -> list[dict]:
     return out
 
 
-def classificar(arquivos: list[dict], videos: list[str]) -> dict:
-    """arquivos: [{"nome": "x.srt", "conteudo": "..."}]. Devolve o que foi reconhecido."""
+def classificar(arquivos: list[dict], videos: list[str], info: list[dict] | None = None) -> dict:
+    """arquivos: [{"nome": "x.srt", "conteudo": "..."}]. Devolve o que foi reconhecido.
+
+    `info` (os vídeos com a duração) permite reconhecer a transcrição master do Premiere: todos os vídeos
+    do dia colados numa sequência, sem separadores."""
+    master = False
     por_video: dict[str, list[srt.Cue]] = {}
     unico: list[srt.Cue] | None = None
     tabela: list[dict] = []
@@ -73,6 +77,9 @@ def classificar(arquivos: list[dict], videos: list[str]) -> dict:
         alvo = next((orig for n, orig in nomes_norm if n in _norm(nome)), None)
         if alvo:
             por_video[alvo] = [c for c in cues if not srt.SEPARADOR.match(c.texto.strip())]
+        elif info and dia.eh_master(cues, info) and dia.tabela_colada(info):
+            unico, master = cues, True
+            tabela = dia.tabela_colada(info)
         else:
             ignorados.append(nome)
     if unico is not None:
@@ -82,7 +89,7 @@ def classificar(arquivos: list[dict], videos: list[str]) -> dict:
             if k in videos and k not in por_video:
                 por_video[k] = v
     return {"por_video": por_video, "unico": unico is not None, "tabela": tabela, "skoopia": skoopia,
-            "ignorados": ignorados}
+            "ignorados": ignorados, "master": master}
 
 
 def ler_pasta(pasta: str | Path, limite: int = 400) -> list[dict]:

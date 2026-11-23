@@ -76,6 +76,9 @@ def tabelas_candidatas(videos: list[dict], falas: dict) -> list[list[dict]]:
             ini = math.ceil((fala + fim + 30.0) / 60.0) * 60.0 if pelo_video else \
                 ini + math.ceil(((fs[-1].fim if fs else 0.0) + 2.0 + 30.0) / 60.0) * 60.0
         out.append(tab)
+    colada = dia.tabela_colada(videos)          # sequência master do Premiere: vídeos colados, sem espaço
+    if colada:
+        out.append(colada)
     return out
 
 
@@ -105,6 +108,14 @@ def ligar(nome: str, cues: list[srt.Cue], videos: list[dict], falas: dict, tabel
         return {"modo": "pendente", "video": None,
                 "motivo": "é do SRT único do dia: importe o SRT único (ou a tabela) para dividir"}
     notas = sorted(((_pontuar(cues, falas.get(v["nome"], [])), v["nome"]) for v in videos), reverse=True)
+    # cabe num vídeo só, mas pode ser do dia inteiro (SRT único ou sequência master) que só tem marcas no começo
+    candidatas = [tabela] if tabela else tabelas_candidatas(videos, falas)
+    dia_nota, dia_tab = max(((_nota_tabela(cues, t, falas), t) for t in candidatas), key=lambda x: x[0],
+                            default=(0.0, None))
+    melhor_video = notas[0][0] if notas else 0.0
+    if dia_tab and dia_nota >= 1.0 and dia_nota > 1.2 * melhor_video:
+        return {"modo": "dia", "video": None, "tabela": dia_tab,
+                "motivo": "SRT do dia inteiro, dividido pelas posições de cada vídeo (conferidas pelas falas)"}
     if notas and notas[0][0] >= 1.0 and (len(notas) == 1 or notas[0][0] >= 1.5 * max(notas[1][0], 0.01)):
         return {"modo": "video", "video": notas[0][1], "motivo": "pelas falas citadas"}
     return {"modo": "pendente", "video": None, "motivo": "não deu para saber de qual vídeo é"}

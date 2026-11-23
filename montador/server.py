@@ -165,7 +165,7 @@ def acao_transcricoes(corpo) -> dict:
             raise ApiError("Pasta não encontrada.")
         arquivos = importar.ler_pasta(corpo["pasta"])
     nomes = [v["nome"] for v in d["videos"]]
-    r = importar.classificar(arquivos, nomes)
+    r = importar.classificar(arquivos, nomes, d["videos"])
     with ESTADO.lock:
         if r["tabela"]:
             ESTADO.tabela = r["tabela"]
@@ -174,7 +174,7 @@ def acao_transcricoes(corpo) -> dict:
         falas = ESTADO.falas
     out = _resultado(d, falas, (d.get("cartao") or {}).get("titulos") or [])
     out["importacao"] = {"videos": sorted(r["por_video"]), "unico": r["unico"], "skoopia": r["skoopia"],
-                         "ignorados": r["ignorados"]}
+                         "ignorados": r["ignorados"], "master": r.get("master", False)}
     return out
 
 
