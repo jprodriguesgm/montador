@@ -66,7 +66,10 @@ def test_aula_em_dois_videos_sai_em_duas_partes(dia_teste):
     d, falas, m, tmp = dia_teste
     fx = [dict(f) for f in m["faixas"]]
     fx[2]["aula"] = 1                                  # junta a 2ª gravação à aula 1 (como um final refeito)
-    aulas = mapa.montar(fx, ["Um", "Tres", "Quatro"])["aulas"]
+    m2 = mapa.montar(fx, ["Um", "Dois", "Tres", "Quatro"])
+    # o número da aula é o do título: a aula 2 ficou sem trecho e aparece como não reconhecida (não vira XML)
+    assert [a["n"] for a in m2["aulas"] if a.get("nao_reconhecida")] == [2]
+    aulas = m2["aulas"]
     r = montagem.montar(d, falas, aulas, "TV", "nenhuma", {}, tmp / "out", modo="regras")
     nomes = [x["nome"] for x in r["resultados"]]
     assert nomes[:2] == ["01 Um", "01 Um (parte 2)"]
@@ -85,7 +88,7 @@ def test_aula_em_dois_videos_sai_em_duas_partes(dia_teste):
     assert "TROCA DE VÍDEO" in nomes_m and sum(n.lower().startswith("lower third") for n in nomes_m) == 1
     creditos = [c for t in seq.iter("track") for c in t.findall("clipitem") if "creditos" in (c.findtext("name") or "")]
     assert len(creditos) == 1 and int(creditos[0].findtext("start")) >= cam[-1][1] - 60
-    assert sorted(p.name for p in (tmp / "out").glob("*.xml")) == ["01 Um.xml", "02 Tres.xml", "03 Quatro.xml"]
+    assert sorted(p.name for p in (tmp / "out").glob("*.xml")) == ["01 Um.xml", "03 Tres.xml", "04 Quatro.xml"]
 
 
 def test_assets_da_maquina(dia_teste):

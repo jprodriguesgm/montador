@@ -273,6 +273,7 @@ def montar(dia: dict, falas: dict, aulas: list[dict], formato: str, insercao: st
            com_script: bool | None = None) -> dict:
     """Gera um XML por aula (por trecho, quando a aula está em mais de um vídeo) — ou um XML só com todas."""
     cfg = cfg or appdata.carregar()
+    aulas = [a for a in aulas if a.get("trechos")]     # aula não reconhecida (sem trecho) não vira sequência
     destino = Path(destino)
     destino.mkdir(parents=True, exist_ok=True)
     videos = {v["nome"]: v for v in dia["videos"]}

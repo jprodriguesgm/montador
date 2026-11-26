@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import __version__, appdata, cartao, dia, dialogs, importar, mapa, montagem, skoopia, srt
+from . import __version__, appdata, atualizar, cartao, dia, dialogs, importar, mapa, montagem, skoopia, srt
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 PORTA_PADRAO = 8767
@@ -43,6 +43,11 @@ class Estado:
         self.marcas: dict = {}           # vídeo → {"arquivo.srt": [cues]} (retorno da Skoopia, já no tempo do vídeo)
         self.skoopia: list = []          # arquivos importados: {nome, tipo, modo, video, motivo, n}
         self.pendentes: dict = {}        # nome → cues (esperando o editor escolher o vídeo)
+        self.skoopia_cues: dict = {}     # nome → cues como vieram (para dividir de novo quando a tabela mudar)
+        self.escolhidos: dict = {}       # nome → vídeo escolhido pelo editor para um SRT da Skoopia
+        self.soltos: dict = {}           # transcrições sem dono que podem ser a master do Premiere: nome → texto
+        self.xml_master: dict = {}       # XML da sequência master importado: nome → texto
+        self.premiere = False            # o editor marcou "Transcrição feita no Premiere"
         self.material_extra: list = []   # arquivos de inserção escolhidos à mão
         self.material_fora: set = set()  # arquivos tirados da lista (não entram na montagem)
         self.material_dentro: set = set()  # arquivos TP que o editor decidiu usar mesmo assim
@@ -52,6 +57,8 @@ class Estado:
             self.manuais, self.raiz_manuais, self.tabela = {}, raiz, []
             self.marcas, self.skoopia, self.pendentes, self.material_extra = {}, [], {}, []
             self.material_fora, self.material_dentro = set(), set()
+            self.skoopia_cues, self.escolhidos, self.soltos, self.xml_master = {}, {}, {}, {}
+            self.premiere = False
 
 
 ESTADO = Estado()
@@ -62,7 +69,7 @@ ESTADO = Estado()
 def acao_estado(_q) -> dict:
     cfg = appdata.carregar()
     from . import slides
-    return {"versao": __version__, "config": cfg, "assets": appdata.estado_assets(cfg),
+    return {"versao": __version__, "build": atualizar.__build__, "config": cfg, "assets": appdata.estado_assets(cfg),
             "cores_premiere": appdata.CORES_PREMIERE, "libreoffice": slides.soffice(cfg),
             "keynote": sys.platform == "darwin" and Path("/Applications/Keynote.app").exists()}
 
@@ -149,12 +156,51 @@ def acao_dia(corpo) -> dict:
             ESTADO.tabela = tabela
         falas.update(ESTADO.manuais)
         ESTADO.dia, ESTADO.falas = d, falas
+        if d.get("candidato_master"):
+            try:
+                q = Path(d["candidato_master"])
+                ESTADO.soltos.setdefault(q.name, importar._decodifica(q.read_bytes()))
+            except OSError:
+                pass
     appdata.salvar({"ultima_pasta": d["raiz"]})
-    return _resultado(d, falas, (d.get("cartao") or {}).get("titulos") or [])
+    if ESTADO.soltos and (ESTADO.premiere or ESTADO.xml_master):     # a mesma pasta aberta de novo
+        _importar([], ESTADO.premiere)
+    _religar_skoopia()
+    return _resultado(d, ESTADO.falas, (d.get("cartao") or {}).get("titulos") or [])
+
+
+def _importar(arquivos: list[dict], premiere: bool) -> dict:
+    """Classifica as transcrições (com as soltas e o XML já guardados) e atualiza o estado."""
+    with ESTADO.lock:
+        d = ESTADO.dia
+        nomes_novos = {a.get("nome") for a in arquivos}
+        for a in arquivos:
+            if (a.get("nome") or "").lower().endswith(".xml"):
+                ESTADO.xml_master = {a["nome"]: a.get("conteudo") or ""}
+        todos = [a for a in arquivos if not (a.get("nome") or "").lower().endswith(".xml")]
+        todos += [{"nome": n, "conteudo": t} for n, t in ESTADO.xml_master.items()]
+        todos += [{"nome": n, "conteudo": t} for n, t in ESTADO.soltos.items() if n not in nomes_novos]
+    nomes = [v["nome"] for v in d["videos"]]
+    r = importar.classificar(todos, nomes, d["videos"], premiere=premiere)
+    with ESTADO.lock:
+        if r["xml"] is None and ESTADO.xml_master and any(n in r["motivos"] for n in ESTADO.xml_master):
+            ESTADO.xml_master = {}                        # XML inválido: não fica guardado
+        if r["tabela"]:
+            ESTADO.tabela = r["tabela"]
+        if r["master"]:
+            ESTADO.soltos = {}
+        else:
+            ESTADO.soltos.update(r["soltos"])
+        ESTADO.manuais.update(r["por_video"])
+        ESTADO.falas.update(r["por_video"])
+    return r
 
 
 def acao_transcricoes(corpo) -> dict:
-    """Transcrições importadas à mão: arquivos arrastados/escolhidos (conteúdo) ou uma pasta (caminho)."""
+    """Transcrições importadas à mão: arquivos arrastados/escolhidos (conteúdo) ou uma pasta (caminho).
+
+    Também o XML da sequência master e a caixa "Transcrição feita no Premiere" (premiere: true/false):
+    a transcrição sem dono que já veio antes é dividida de novo, sem precisar importar outra vez."""
     with ESTADO.lock:
         d = ESTADO.dia
     if d is None:
@@ -164,60 +210,64 @@ def acao_transcricoes(corpo) -> dict:
         if not Path(corpo["pasta"]).is_dir():
             raise ApiError("Pasta não encontrada.")
         arquivos = importar.ler_pasta(corpo["pasta"])
-    nomes = [v["nome"] for v in d["videos"]]
-    r = importar.classificar(arquivos, nomes, d["videos"])
     with ESTADO.lock:
-        if r["tabela"]:
-            ESTADO.tabela = r["tabela"]
-        ESTADO.manuais.update(r["por_video"])
-        ESTADO.falas.update(r["por_video"])
-        falas = ESTADO.falas
-    out = _resultado(d, falas, (d.get("cartao") or {}).get("titulos") or [])
+        if "premiere" in corpo:
+            ESTADO.premiere = bool(corpo["premiere"])
+        premiere = ESTADO.premiere
+    r = _importar(arquivos, premiere)
+    _religar_skoopia()                                    # a tabela pode ter mudado: a Skoopia se divide de novo
+    out = _resultado(d, ESTADO.falas, (d.get("cartao") or {}).get("titulos") or [])
     out["importacao"] = {"videos": sorted(r["por_video"]), "unico": r["unico"], "skoopia": r["skoopia"],
-                         "ignorados": r["ignorados"], "master": r.get("master", False)}
+                         "ignorados": [n for n in r["ignorados"] if n in {a.get("nome") for a in arquivos}],
+                         "master": r.get("master", False), "motivos": r["motivos"], "explicacao": r["explicacao"],
+                         "xml": r["xml"]}
     return out
 
 
 def acao_skoopia(corpo) -> dict:
     """SRTs de cortes e inserções da Skoopia (conteúdo vindo da janela)."""
     with ESTADO.lock:
-        d, falas, tabela = ESTADO.dia, ESTADO.falas, ESTADO.tabela
+        d = ESTADO.dia
     if d is None:
         raise ApiError("Escolha a pasta do dia primeiro.")
-    lidos = [(a.get("nome") or "sem nome.srt", srt.ler_texto(a.get("conteudo") or "")) for a in corpo.get("arquivos") or []]
-    lidos = sorted((x for x in lidos if x[1]), key=lambda x: skoopia.tipo(x[1]) != "cortes")   # cortes primeiro: têm citações
-    for nome, cues in lidos:
-        dest = skoopia.ligar(nome, cues, d["videos"], falas, tabela)
-        if dest.get("tabela") and not tabela:
-            tabela = dest["tabela"]
-            with ESTADO.lock:
-                ESTADO.tabela = tabela
-        _guardar_skoopia(nome, cues, dest, tabela)
-    if tabela:              # pendentes que só esperavam a tabela
-        for nome, cues in list(ESTADO.pendentes.items()):
-            dest = skoopia.ligar(nome, cues, d["videos"], falas, tabela)
-            if dest["modo"] != "pendente":
-                _guardar_skoopia(nome, cues, dest, tabela)
-    if corpo.get("escolher"):                 # o editor escolheu o vídeo de um pendente
-        e = corpo["escolher"]
-        cues = ESTADO.pendentes.get(e.get("nome"))
-        if cues is not None and e.get("video"):
-            _guardar_skoopia(e["nome"], cues, {"modo": "video", "video": e["video"], "motivo": "escolhido pelo editor"}, tabela)
-    if corpo.get("remover"):
-        _remover_skoopia(corpo["remover"])
+    with ESTADO.lock:
+        for a in corpo.get("arquivos") or []:
+            cues = srt.ler_texto(a.get("conteudo") or "")
+            if cues:
+                nome = a.get("nome") or "sem nome.srt"
+                ESTADO.skoopia_cues[nome] = cues
+                ESTADO.escolhidos.pop(nome, None)
+        e = corpo.get("escolher")
+        if e and e.get("nome") in ESTADO.skoopia_cues and e.get("video"):   # o editor escolheu o vídeo
+            ESTADO.escolhidos[e["nome"]] = e["video"]
+        if corpo.get("remover"):
+            ESTADO.skoopia_cues.pop(corpo["remover"], None)
+            ESTADO.escolhidos.pop(corpo["remover"], None)
+    _religar_skoopia()
     return _resultado(d, ESTADO.falas, (d.get("cartao") or {}).get("titulos") or [])
 
 
-def _remover_skoopia(nome: str):
+def _religar_skoopia():
+    """Liga cada SRT da Skoopia ao vídeo (ou divide pelo dia) com o que se sabe agora."""
     with ESTADO.lock:
-        ESTADO.skoopia = [x for x in ESTADO.skoopia if x["nome"] != nome]
-        ESTADO.pendentes.pop(nome, None)
-        for m in ESTADO.marcas.values():
-            m.pop(nome, None)
+        d, falas, tabela = ESTADO.dia, ESTADO.falas, ESTADO.tabela
+        if d is None:
+            return
+        ESTADO.marcas, ESTADO.skoopia, ESTADO.pendentes = {}, [], {}
+        # cortes primeiro: têm citações e ajudam a achar as posições para as inserções
+        lidos = sorted(ESTADO.skoopia_cues.items(), key=lambda x: skoopia.tipo(x[1]) != "cortes")
+        tabela_uso = tabela
+        for nome, cues in lidos:
+            if nome in ESTADO.escolhidos:
+                dest = {"modo": "video", "video": ESTADO.escolhidos[nome], "motivo": "escolhido pelo editor"}
+            else:
+                dest = skoopia.ligar(nome, cues, d["videos"], falas, tabela_uso)
+                if dest.get("tabela") and not tabela_uso:
+                    tabela_uso = dest["tabela"]       # posições achadas pelas falas: valem para os próximos
+            _guardar_skoopia(nome, cues, dest, tabela_uso)
 
 
 def _guardar_skoopia(nome: str, cues, dest: dict, tabela: list):
-    _remover_skoopia(nome)
     with ESTADO.lock:
         t = skoopia.tipo(cues)
         if dest["modo"] == "pendente":
@@ -288,19 +338,57 @@ def _material(d: dict) -> dict:
     return out
 
 
+_CACHE_SLIDES: dict = {}
+
+
+def _texto_pptx(caminho: str) -> str:
+    """Texto de todos os slides de um .pptx (guardado enquanto o arquivo não mudar)."""
+    from . import slides
+    try:
+        chave = (caminho, Path(caminho).stat().st_mtime)
+    except OSError:
+        return ""
+    if chave not in _CACHE_SLIDES:
+        try:
+            _CACHE_SLIDES[chave] = " ".join(t for s in slides.ler(caminho) if not s.get("referencias")
+                                            for t in s["textos"])
+        except Exception:      # noqa: BLE001 — slide ilegível só deixa de ser pista
+            _CACHE_SLIDES[chave] = ""
+    return _CACHE_SLIDES[chave]
+
+
+def _pistas(d: dict, titulos: list[str]) -> tuple[list[str], dict]:
+    """Texto dos slides de cada título e inserções da Skoopia de cada vídeo (pistas do mapa)."""
+    pptx = _material(d)["pptx"]
+    decks = [(Path(p).stem, _texto_pptx(p)) for p in pptx]
+    slides_t = mapa.slides_dos_titulos([x for x in decks if x[1]], titulos)
+    with ESTADO.lock:
+        ins = {v: [c for lista in m.values() for c in lista if skoopia.classe(c) == "insercao"]
+               for v, m in ESTADO.marcas.items()}
+    return slides_t, {v: cs for v, cs in ins.items() if cs}
+
+
 def _resultado(d: dict, falas: dict, titulos_brutos: list[str]) -> dict:
-    # 1ª passada sem títulos para saber quantas aulas o vídeo mostra; depois desgruda os títulos para
-    # bater com essa conta e refaz o mapa com eles
-    previa = mapa.sugerir(d["videos"], falas, [])
-    sep = cartao.separar_titulos(titulos_brutos, len(previa["aulas"]) or None) if titulos_brutos else \
-        {"titulos": [], "separados": 0, "conferir": False, "motivo": ""}
-    m = mapa.sugerir(d["videos"], falas, sep["titulos"])
+    # títulos grudados no cartão: uma 1ª passada sem títulos diz quantas aulas o vídeo mostra; se for mais
+    # do que as linhas do cartão, desgruda os títulos até bater. Depois o mapa parte dos títulos.
+    linhas = [t.strip() for t in titulos_brutos if t and t.strip()]
+    sep = {"titulos": linhas, "separados": 0, "conferir": False, "motivo": ""}
+    if linhas:
+        previa = mapa.sugerir(d["videos"], falas, [])
+        n = len([a for a in previa["aulas"] if a["trechos"]])
+        if n > len(linhas):
+            sep = cartao.separar_titulos(linhas, n)
+    slides_t, ins = _pistas(d, sep["titulos"]) if sep["titulos"] else ([], {})
+    m = mapa.sugerir(d["videos"], falas, sep["titulos"], slides_t, ins)
     with ESTADO.lock:
         for a in m["aulas"]:
             a["marcas"] = skoopia.contar(ESTADO.marcas, a["trechos"])
         d = dict(d, transcritos=sorted(k for k, v in falas.items() if v), material=_material(d),
-                 skoopia=list(ESTADO.skoopia), tem_tabela=bool(ESTADO.tabela))
+                 skoopia=list(ESTADO.skoopia), tem_tabela=bool(ESTADO.tabela), premiere=ESTADO.premiere,
+                 xml_master=next(iter(ESTADO.xml_master), None), soltos=sorted(ESTADO.soltos))
     d["avisos"] = [a for a in d["avisos"] if not a.startswith("Sem transcrição")]
+    if set(v["nome"] for v in d["videos"]) <= set(d["transcritos"]):     # a master já foi dividida
+        d["avisos"] = [a for a in d["avisos"] if "parece a transcrição da sequência" not in a]
     faltam = [v["nome"] for v in d["videos"] if v["nome"] not in d["transcritos"]]
     if faltam:
         d["avisos"].append("Sem transcrição: " + ", ".join(faltam) + ". Importe os .srt ou rode o transcribe na pasta.")
@@ -342,6 +430,8 @@ def acao_montar(corpo) -> dict:
         raise ApiError("Escolha a pasta do dia primeiro.")
     titulos = corpo.get("titulos") or []
     m = mapa.montar(corpo.get("faixas") or [], titulos)
+    sem_trecho = [a["nome"] for a in m["aulas"] if not a["trechos"]]
+    m["aulas"] = [a for a in m["aulas"] if a["trechos"]]
     if not m["aulas"]:
         raise ApiError("Nenhuma aula no mapa do dia.")
     destino = corpo.get("destino") or str(Path(d["raiz"]) / "Projeto")
@@ -358,10 +448,13 @@ def acao_montar(corpo) -> dict:
         d = ESTADO.dia = dict(d, material=novo)
     dd = dict(d, material=_material(d))
     try:
-        return montagem.montar(dd, falas, m["aulas"], corpo.get("formato") or "TP", corpo.get("insercao") or "slide",
+        r = montagem.montar(dd, falas, m["aulas"], corpo.get("formato") or "TP", corpo.get("insercao") or "slide",
                                marcas, destino, cfg, cfg.get("marcacoes") or "auto",
                                juntar=bool(corpo["juntar"]) if "juntar" in corpo else bool(cfg.get("juntar_xml", True)),
                                com_script=bool(corpo["script"]) if "script" in corpo else None)
+        if sem_trecho:
+            r["avisos"].insert(0, "Ficaram sem sequência (aula não reconhecida no mapa): " + ", ".join(sem_trecho))
+        return r
     except OSError as e:
         raise ApiError(f"Não consegui gravar em {destino}: {e}")
 
@@ -402,12 +495,61 @@ def acao_abrir_pasta(corpo) -> dict:
     return {"ok": True}
 
 
+_ATUALIZACAO: dict = {}           # resposta do GitHub guardada por 1 hora
+_SERVIDOR: list = []                # o servidor HTTP aberto (para fechar depois de atualizar)
+
+
+def acao_atualizacao(corpo) -> dict:
+    """Tem versão nova no GitHub? (não trava a janela se estiver sem internet)"""
+    testes = bool(appdata.carregar().get("atualizar_testes"))
+    agora = time.time()
+    if not corpo.get("forcar") and _ATUALIZACAO.get("testes") == testes and agora - _ATUALIZACAO.get("quando", 0) < 3600:
+        return _ATUALIZACAO["r"]
+    try:
+        r = atualizar.verificar(testes)
+    except (atualizar.ErroAtualizar, ValueError) as e:
+        r = {"tem": False, "erro": str(e)}
+    r["atual"] = atualizar.atual()
+    _ATUALIZACAO.update(r=r, testes=testes, quando=agora)
+    return r
+
+
+def acao_atualizar(corpo) -> dict:
+    """modo "baixar": o .zip vai para Downloads e a pasta abre. modo "instalar": troca o app e reabre."""
+    info = acao_atualizacao({})
+    if not info.get("tem"):
+        raise ApiError(info.get("erro") or "Não há versão nova.")
+    try:
+        zip_ = atualizar.baixar(info)
+    except atualizar.ErroAtualizar as e:
+        raise ApiError(f"Não consegui baixar: {e}.")
+    if corpo.get("modo") != "instalar":
+        try:
+            acao_abrir_pasta({"caminho": str(zip_.parent)})
+        except ApiError:
+            pass
+        return {"arquivo": str(zip_)}
+    try:
+        r = atualizar.instalar(zip_)
+    except atualizar.ErroAtualizar as e:
+        acao_abrir_pasta({"caminho": str(zip_.parent)})
+        raise ApiError(f"Não consegui trocar o app: {e}. O arquivo ficou em {zip_.parent}.")
+    except OSError as e:
+        acao_abrir_pasta({"caminho": str(zip_.parent)})
+        raise ApiError(f"Sem permissão para trocar o app ({e}). O arquivo ficou em {zip_.parent}: "
+                       "troque à mão como antes.")
+    if _SERVIDOR:                                       # fecha este app: o script troca e abre o novo
+        threading.Timer(1.5, _SERVIDOR[0].shutdown).start()
+    return {"arquivo": str(zip_), **r}
+
+
 GET = {"/api/estado": acao_estado, "/api/raizes": acao_raizes, "/api/listar": acao_listar}
 POST = {"/api/config": acao_config, "/api/escolher": acao_escolher, "/api/assets/apontar": acao_apontar_asset,
         "/api/dia": acao_dia, "/api/cartao/texto": acao_cartao_texto, "/api/transcricoes": acao_transcricoes,
         "/api/skoopia": acao_skoopia, "/api/material": acao_material, "/api/mapa": acao_mapa,
         "/api/montar": acao_montar, "/api/abrir_pasta": acao_abrir_pasta,
-        "/api/thumbs/modelo": acao_thumbs_modelo, "/api/thumbs/salvar": acao_thumbs_salvar}
+        "/api/thumbs/modelo": acao_thumbs_modelo, "/api/thumbs/salvar": acao_thumbs_salvar,
+        "/api/atualizacao": acao_atualizacao, "/api/atualizar": acao_atualizar}
 
 
 # ====================================================================== HTTP
@@ -532,7 +674,8 @@ def _precarregar():
     for m in ("copy", "difflib", "html", "json", "math", "unicodedata", "urllib.parse", "uuid", "xml.etree.ElementTree",
               "zipfile", "zlib", "runpy", "tempfile", "subprocess", "shutil", "PIL.Image", "PIL.ImageDraw", "PIL.ImageFont",
               "PIL.ImageFilter", "pypdfium2", "montador.montagem", "montador.insercoes", "montador.slides",
-              "montador.juntar", "montador.thumbs", "montador.skoopia", "montador.mapa"):
+              "montador.juntar", "montador.thumbs", "montador.skoopia", "montador.mapa", "montador.premiere",
+              "montador.importar", "montador.atualizar", "urllib.request", "ssl", "certifi"):
         try:
             importlib.import_module(m)
         except Exception:      # noqa: BLE001
@@ -557,6 +700,7 @@ def serve(porta: int | None = None, abrir_navegador: bool = True, fechar_sozinho
             return
     _precarregar()
     srv = ThreadingHTTPServer(("127.0.0.1", porta), Handler)
+    _SERVIDOR[:] = [srv]
     print(f"Montador {__version__} em {url}")
     if abrir_navegador:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()

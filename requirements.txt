@@ -1,2 +1,3 @@
 Pillow
 pypdfium2
+certifi

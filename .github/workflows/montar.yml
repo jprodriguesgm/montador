@@ -124,6 +124,13 @@ jobs:
           python -c "import re,sys; p='montador/__init__.py'; s=open(p,encoding='utf-8').read(); open(p,'w',encoding='utf-8').write(re.sub(r'__version__ = \".*\"', '__version__ = \"'+sys.argv[1]+'\"', s))" "$VER"
           python -c "import montador; print('versão', montador.__version__)"
 
+      - name: Etiqueta da montagem de teste (para o botão Atualizar)
+        if: "!startsWith(github.ref, 'refs/tags/v') && inputs.versao == ''"
+        shell: bash
+        run: |
+          python -c "import re,sys; p='montador/__init__.py'; s=open(p,encoding='utf-8').read(); open(p,'w',encoding='utf-8').write(re.sub(r'__build__ = \".*?\"', '__build__ = \"'+sys.argv[1]+'\"', s))" "montagem-${GITHUB_RUN_NUMBER}"
+          python -c "import montador; print('montagem', montador.__build__)"
+
       - name: Testes
         shell: bash
         run: |

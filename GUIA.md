@@ -115,6 +115,12 @@ caminho no campo. O app mostra quantos vídeos, transcrições e se achou o cart
 - **Transcrição master:** se a transcrição foi feita no Premiere, com todos os vídeos do dia colados um
   depois do outro (na ordem dos nomes), é só pôr o `.srt` na Footage ou importar: o app divide pela
   duração de cada vídeo. Os SRTs da Skoopia feitos sobre ela também são divididos sozinhos.
+  - Se o app não reconhecer sozinho, marque **Transcrição feita no Premiere (vídeos em sequência)**: a
+    transcrição que já foi importada é dividida na hora, sem importar de novo.
+  - Mais exato: **Importar XML da sequência master** (no Premiere, selecione a sequência e use
+    **Arquivo → Exportar → Final Cut Pro XML**). O XML diz onde cada vídeo começa de verdade: aguenta
+    espaço entre os vídeos, ordem diferente da dos nomes, vídeo cortado no começo e vídeo que não é do dia.
+  - Se o app não conseguir ler a duração de algum vídeo, ele diz **qual** — o XML resolve nesse caso.
 - Vídeo sem transcrição não monta: rode o `transcribe` na pasta antes.
 
 ### Passo 2 — Cartão da gravação
@@ -147,7 +153,13 @@ Confira o formato (**TP**, **TV** ou **Screencast**) e o tipo de inserção. O a
 Arraste para a caixa os SRTs de **cortes** e de **inserções** que a Skoopia devolveu, quantos forem (ou
 **Escolher arquivos**). O app reconhece cada um pelo conteúdo e liga ao vídeo certo:
 - pelo nome do arquivo, quando ele traz o nome do vídeo;
-- quando vêm do **SRT único** do dia, ele divide sozinho por vídeo.
+- quando vêm do **SRT único** ou da **transcrição master do Premiere**, ele divide sozinho por vídeo;
+- senão, compara as falas citadas com a transcrição de cada vídeo.
+
+Depois de dividir, o app confere: se as falas citadas não batem com a transcrição naqueles tempos, ou se o
+arquivo passa do fim da sequência, ele avisa (**ATENÇÃO**) — pode ser de outro dia. Quando não dá para
+saber o vídeo, ele diz o motivo e pede para você escolher. O que chegar depois (o XML, a transcrição) faz
+os SRTs da Skoopia já importados se dividirem de novo, sem precisar arrastar outra vez.
 
 ![Marcações](docs/guia/06-skoopia.png)
 
@@ -173,9 +185,22 @@ os JPEG nessa pasta, o app usa os seus.
 
 ### Passo 6 — Mapa do dia
 
-O mapa mostra cada vídeo do dia e a qual aula cada pedaço pertence. O app sugere sozinho: tira os testes
-de câmera, percebe o take descartado, o final refeito em outro vídeo e a aula que continua no vídeo
-seguinte. Confira se a conta bate com os títulos.
+O mapa mostra cada vídeo do dia e a qual aula cada pedaço pertence. **Os títulos do cartão mandam:** cada
+título é uma aula, na ordem do dia, e o app procura o trecho de cada uma. Ele tira os testes de câmera e os
+arquivos minúsculos sem aula ("vou parar cinco minutinhos"), percebe o take descartado, o final refeito em
+outro vídeo e a aula que continua no vídeo seguinte.
+
+Para achar onde começa cada aula, o app soma pistas — nenhuma decide sozinha: o "Olá" e o "vejo vocês"
+na fala; a conta dos títulos; aberturas como "Neste vídeo…"/"Nesta aula…" e a síntese no fim da aula
+anterior; o texto dos slides de cada aula (`.pptx`, na ordem dos nomes: U3_T1_V1, U3_T1_V2…) e das
+inserções da Skoopia, comparado com o que é falado; e a duração. Sem cartão, ele só separa uma aula sem
+"Olá" quando há pelo menos duas pistas fortes.
+
+- **Aula não reconhecida:** o título que não achou trecho com segurança aparece em laranja, com
+  **escolha o trecho** — escolha na lista e pronto. Ela não vira sequência enquanto não tiver trecho, e
+  as outras aulas **não** mudam de número (aula 9 continua sendo o 9º título).
+- **Pausa longa** (5 minutos ou mais sem fala no meio de um vídeo) fica marcada para conferir: às vezes o
+  começo antes da pausa é um take descartado.
 
 ![Mapa do dia](docs/guia/08-mapa.png)
 
@@ -263,14 +288,29 @@ Engrenagem ⚙ no canto da janela. Tudo fica guardado **neste computador**.
 - **Marcações:** Automático (Skoopia se houver SRT, senão regras), Sempre Skoopia ou Sempre sem IA.
 - **Slides:** o LibreOffice usado e o tempo padrão de cada slide na tela.
 - **Thumbs:** o `index.html` do gerador de thumbnail.
+- **Versões de teste:** o botão Atualizar oferece também as montagens de teste (só para quem testa).
 
 ---
 
 ## 7. Atualizar o app
 
+Quando sai uma versão nova, aparece no topo da janela **"Montador X disponível"** com dois botões:
+- **Atualizar:** o app baixa a versão nova, fecha, troca a si mesmo e abre de novo numa janela nova. Não
+  precisa de administrador nem do comando `xattr` (o arquivo baixado pelo próprio app não fica bloqueado).
+  - **Mac:** se não der para trocar o app na pasta onde ele está, o novo vai para a pasta **Aplicativos do
+    usuário** (`~/Applications`) e o app avisa.
+  - **Windows:** se não der para trocar na pasta atual, o novo vai para
+    `%LOCALAPPDATA%\Programs\Montador` e o app avisa (troque o atalho).
+- **Baixar:** só baixa o `.zip` para a pasta **Downloads** e abre a pasta — para trocar à mão, como antes.
+
+Se a troca automática esbarrar em alguma permissão, o app avisa e deixa o `.zip` em Downloads. Sem os
+botões (ou numa versão antiga), atualize à mão:
 1. Baixe de novo pelo link direto da [seção 1](#1-baixar-e-instalar).
 2. Troque o app antigo pelo novo (Mac: arraste por cima; Windows: extraia por cima ou numa pasta nova).
-3. **Mac:** repita o comando `xattr` (cada versão nova vem bloqueada de novo).
+3. **Mac:** repita o comando `xattr` (cada versão nova baixada pelo navegador vem bloqueada de novo).
+
+Quem testa as novidades antes da equipe pode marcar, nas Configurações, **Receber também as versões de
+teste no botão Atualizar**.
 
 Se a versão antiga ainda estiver aberta, a nova fecha a antiga sozinha ao abrir. As configurações ficam
 **fora** do app, então atualizar não apaga nada. A versão aparece no topo da janela, ao lado do nome.
@@ -284,7 +324,10 @@ Se a versão antiga ainda estiver aberta, a nova fecha a antiga sozinha ao abrir
 - **A aula saiu sem slides e com CARTELA em tudo:** o relatório diz se o app achou os `.pptx` ("Slides
   de …"). Confira a caixa Material e monte de novo.
 - **O mapa juntou ou separou aulas errado:** clique no trecho e troque a aula, descarte ou divida.
-  Confira também se o número de títulos do cartão bate com as aulas gravadas.
+  Confira também se o número de títulos do cartão bate com as aulas gravadas. Se alguma aula ficou
+  **não reconhecida**, escolha o trecho dela na lista embaixo do mapa.
+- **"Parece a transcrição da sequência master, mas…":** marque **Transcrição feita no Premiere** ou importe
+  o XML da sequência (passo 1). O aviso diz qual vídeo ficou sem duração, quando for o caso.
 - **Vídeo "sem transcrição":** rode o `transcribe` na pasta do dia, ou importe os `.srt` no passo 1.
 - **Arquivo da Skoopia "pendente":** o app não soube de qual vídeo é. Escolha o vídeo na lista, ou
   importe o SRT único do dia (com ele, a divisão é exata).

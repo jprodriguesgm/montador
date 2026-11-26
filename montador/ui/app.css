@@ -123,3 +123,10 @@ label.btn{display:inline-flex;align-items:center}
   white-space:pre-wrap;overflow-wrap:break-word;outline:none;min-width:20%;padding:2px;box-sizing:border-box}
 .th-txt:focus{box-shadow:0 0 0 1px rgba(255,255,255,.35)}
 .th-arq{margin-top:4px;font-family:var(--mono);font-size:11px}
+.premiere{margin-top:10px;display:grid;gap:8px}
+.marcar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--texto2);cursor:pointer}
+.marcar .dica{flex-basis:100%;margin-left:24px}
+.aula.nao-rec .num,.aula.nao-rec input{color:var(--alerta)}
+.aula .escolher{grid-column:3;display:flex;gap:8px;align-items:center;font-size:12px;color:var(--alerta)}
+.aula .escolher select{max-width:340px}
+.atualizar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--alerta)}

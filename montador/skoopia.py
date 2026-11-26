@@ -97,7 +97,8 @@ def ligar(nome: str, cues: list[srt.Cue], videos: list[dict], falas: dict, tabel
     maior = max((_fim_video(v, falas) for v in videos), default=0)
     if maior and fim > maior + 5:
         if tabela:
-            return {"modo": "dia", "video": None, "motivo": "SRT do dia inteiro, dividido pela tabela", "tabela": tabela}
+            return {"modo": "dia", "video": None, "tabela": tabela,
+                    "motivo": "SRT do dia inteiro, dividido pela tabela" + conferir(cues, tabela, videos, falas)}
         # sem a tabela: refaz as posições prováveis e fica com a que bate com as falas citadas
         notas = sorted(((_nota_tabela(cues, t, falas), k, t) for k, t in enumerate(tabelas_candidatas(videos, falas))),
                        key=lambda x: (-x[0], x[1]))
@@ -105,8 +106,13 @@ def ligar(nome: str, cues: list[srt.Cue], videos: list[dict], falas: dict, tabel
         if notas and notas[0][0] >= max(1.0, 0.3 * citadas):
             return {"modo": "dia", "video": None, "tabela": notas[0][2],
                     "motivo": "SRT do dia inteiro, dividido pelas posições de cada vídeo (conferidas pelas falas)"}
+        sem = [v["nome"] for v in videos if not v.get("duracao")]
         return {"modo": "pendente", "video": None,
-                "motivo": "é do SRT único do dia: importe o SRT único (ou a tabela) para dividir"}
+                "motivo": f"é do dia inteiro (vai até {_hms(fim)}; o maior vídeo tem {_hms(maior)}) e falta saber onde "
+                          "cada vídeo começa: " + (f"não consegui ler a duração de {', '.join(sem)} — importe o XML "
+                                                   "da sequência master" if sem else
+                                                   "importe a transcrição do dia (SRT único ou master do Premiere) "
+                                                   "ou o XML da sequência")}
     notas = sorted(((_pontuar(cues, falas.get(v["nome"], [])), v["nome"]) for v in videos), reverse=True)
     # cabe num vídeo só, mas pode ser do dia inteiro (SRT único ou sequência master) que só tem marcas no começo
     candidatas = [tabela] if tabela else tabelas_candidatas(videos, falas)
@@ -118,7 +124,39 @@ def ligar(nome: str, cues: list[srt.Cue], videos: list[dict], falas: dict, tabel
                 "motivo": "SRT do dia inteiro, dividido pelas posições de cada vídeo (conferidas pelas falas)"}
     if notas and notas[0][0] >= 1.0 and (len(notas) == 1 or notas[0][0] >= 1.5 * max(notas[1][0], 0.01)):
         return {"modo": "video", "video": notas[0][1], "motivo": "pelas falas citadas"}
-    return {"modo": "pendente", "video": None, "motivo": "não deu para saber de qual vídeo é"}
+    if not any(falas.get(v["nome"]) for v in videos):
+        motivo = "os vídeos ainda não têm transcrição para comparar as falas citadas — importe as transcrições"
+    elif not any(_CITACAO.search(c.texto) for c in cues) and tipo(cues) == "cortes":
+        motivo = "o arquivo não traz o nome do vídeo nem falas citadas para comparar"
+    elif notas and notas[0][0] >= 1.0:
+        motivo = f"as falas citadas combinam com mais de um vídeo ({notas[0][1]} e {notas[1][1]})"
+    else:
+        motivo = "as falas citadas não aparecem em nenhuma transcrição do dia (pode ser de outro dia)"
+    return {"modo": "pendente", "video": None, "motivo": "não deu para saber de qual vídeo é: " + motivo}
+
+
+def _hms(s: float) -> str:
+    s = int(round(s))
+    return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}"
+
+
+def conferir(cues: list[srt.Cue], tabela: list[dict], videos: list[dict], falas: dict) -> str:
+    """Depois de dividir pela tabela: as falas citadas batem com a transcrição de cada vídeo? ("" = tudo certo)."""
+    avisos = []
+    fim = max((c.fim for c in cues), default=0)
+    durs = {v["nome"]: v.get("duracao") for v in videos}
+    ult = max(tabela, key=lambda r: r["separador"])
+    fim_seq = ult.get("fim") or (ult["fala"] + durs[ult["video"]] if durs.get(ult["video"]) else None)
+    if fim_seq and fim > fim_seq + 30:
+        avisos.append(f"vai até {_hms(fim)}, depois do fim da sequência ({_hms(fim_seq)}) — confira se é deste dia")
+    citadas = [c for c in cues if _CITACAO.search(c.texto)]
+    if len(citadas) >= 3 and any(falas.get(v["nome"]) for v in videos):
+        por = dia.dividir_unico(citadas, tabela)
+        nota = sum(_pontuar(v, falas.get(k, [])) for k, v in por.items())
+        if nota < 0.3 * len(citadas):
+            avisos.append("as falas citadas não batem com a transcrição nesses tempos — confira se a "
+                          "transcrição/XML usados para dividir são deste dia")
+    return (" · ATENÇÃO: " + "; ".join(avisos)) if avisos else ""
 
 
 def distribuir(cues: list[srt.Cue], destino: dict, tabela: list[dict]) -> dict[str, list[srt.Cue]]:

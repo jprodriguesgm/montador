@@ -12,6 +12,9 @@
   <header class="topo">
     <span class="luzes" aria-hidden="true"><i></i><i></i><i></i></span>
     <span class="titulo">Montador <small id="versao"></small></span>
+    <span class="atualizar hidden" id="atualizar"><span id="atualizarTexto"></span>
+      <button class="btn pequeno" id="atualizarBaixar" title="Baixa o arquivo e abre a pasta: você troca o app">Baixar</button>
+      <button class="btn pequeno principal" id="atualizarIr" title="Baixa, troca o app e abre a versão nova">Atualizar</button></span>
     <button class="icone" id="abrirConfig" title="Configurações" aria-label="Configurações">⚙︎</button>
   </header>
 
@@ -29,9 +32,17 @@
     <div class="pilulas" id="pilulasDia"></div>
     <div class="avisos" id="avisosDia"></div>
     <div class="linha importar hidden" id="importarTrans">
-      <label class="btn pequeno">Importar transcrições (.srt)<input type="file" id="arqTrans" multiple accept=".srt,.txt" hidden></label>
+      <label class="btn pequeno">Importar transcrições (.srt)<input type="file" id="arqTrans" multiple accept=".srt,.txt,.xml" hidden></label>
       <button class="btn pequeno" id="pastaTrans">Escolher pasta das transcrições</button>
       <span class="dica">ou arraste os .srt para cá (de cada vídeo, ou o SRT único com a tabela)</span>
+    </div>
+    <div class="premiere hidden" id="caixaPremiere">
+      <label class="marcar"><input type="checkbox" id="premiere"> Transcrição feita no Premiere (vídeos em sequência)
+        <span class="dica">usa a duração de cada vídeo da pasta, colados na ordem dos nomes</span></label>
+      <div class="linha">
+        <label class="btn pequeno">Importar XML da sequência master<input type="file" id="arqXml" accept=".xml" hidden></label>
+        <span class="dica" id="dicaXml">mais exato: lê onde cada vídeo começa (aguenta espaço, ordem diferente e vídeo de fora)</span>
+      </div>
     </div>
   </section>
 
@@ -160,6 +171,8 @@
     <div class="linha"><span class="dica" id="cfgThumb"></span><button class="btn pequeno" id="cfgThumbBtn">Procurar</button></div>
     <label class="dica">Tempo de cada slide na tela quando a nota do slide não diz (segundos)
       <input class="campo" type="number" min="2" max="120" step="1" id="cfgDurSlide" style="width:80px"></label>
+    <label class="marcar" style="margin-top:10px"><input type="checkbox" id="cfgTestes"> Receber também as versões de teste no botão Atualizar
+      <span class="dica">só para quem testa as novidades antes da equipe</span></label>
     <div class="acoes"><button class="btn principal" id="fecharConfig">Fechar</button></div>
   </div>
 </div>

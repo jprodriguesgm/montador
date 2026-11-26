@@ -10,7 +10,7 @@ Segue o modelo do Revisor de Vídeos:
 - repositório público no GitHub (`jprodriguesgm/montador`), aprovado pela TI;
 - empacotado, sem pedir admin nem Python instalado;
 - builds pelo GitHub Actions; versões de teste podem sair separadas por sistema, a versão oficial sai sempre com Mac e Windows juntos;
-- as outras unidades baixam as atualizações do GitHub.
+- as outras unidades baixam as atualizações do GitHub — pelo botão **Atualizar** do próprio app (baixa a release, troca a si mesmo e reabre; Mac em `~/Applications` quando não dá para escrever na pasta atual; Windows troca ao fechar) ou **Baixar** (só o `.zip`, troca à mão).
 
 Visual no estilo do app Subir no Drive: cinza escuro, cantos arredondados, contorno branco leve e sombra azul bem clara.
 Ícone: original, na linha "montador de móveis" (parafusadeira montando peças que lembram quadros de filme/timeline).
@@ -18,6 +18,8 @@ Visual no estilo do app Subir no Drive: cinza escuro, cantos arredondados, conto
 ## Entradas
 
 1. **Pasta do dia.** O app acha os vídeos (Footage), as transcrições, o `SRT unico` e a `tabela` gerados pelo `transcribe`.
+   - Transcrição master do Premiere (vídeos colados numa sequência): dividida pela duração de cada vídeo (reconhecida sozinha, ou com a caixa "Transcrição feita no Premiere") ou, mais exato, pelo **XML da sequência** (Final Cut Pro XML), que dá o início real de cada vídeo.
+   - Duração do vídeo: cabeçalho do MP4 → fragmentos do MP4 (o OBS grava fragmentado) → `afinfo` (Mac) → `ffprobe`. Faltou mesmo assim: o app diz qual vídeo.
 2. **Cartão.** ID do cartão do Trello (pela API, chave configurada por máquina) **ou** o TXT com os mesmos campos na pasta `Originais`. A leitura do cartão fica isolada para trocar a fonte (Planner) sem mexer no resto.
    - Do cartão vêm: formato, tipo de inserção, títulos das aulas (os títulos são sempre os das aulas gravadas no dia, na ordem).
    - Títulos que chegam grudados na mesma linha são separados pelo app até a conta bater com o número de aulas; o editor confirma.
@@ -38,7 +40,10 @@ Chave **"Marcações: Skoopia / Sem IA"**. Sem SRTs da Skoopia, usa automaticame
   - take descartado: o vídeo some inteiro (o primeiro take, quando a aula foi regravada);
   - final refeito em take curto: vídeo A até o ponto do erro + vídeo B;
   - final refeito emendando a próxima aula: aula 1 = A (até o erro) + B (até o fim do final); aula 2 = B (do "Olá" em diante).
-- Pistas para a divisão: abertura e fechamento na fala ("Olá…", "Vejo vocês lá", "nos vemos"), `[ERRO]` da Skoopia no fim de um vídeo, contagem de títulos.
+- **Os títulos do cartão mandam** (decisão de 25/11/2026): cada título é uma aula, na ordem; o número da aula no mapa é o número do título (aula 9 = 9º título, mesmo se a 8 ficar sem trecho). Título sem trecho seguro = "aula não reconhecida — escolha"; nunca juntar tudo numa aula por falta de pista.
+- Pistas para a divisão, somadas (nenhuma decide sozinha): abertura e fechamento na fala ("Olá…", "Vejo vocês lá", "nos vemos"); contagem de títulos (a conta tem de fechar para mais e para menos); abertura sem cumprimento ("Neste vídeo", "Nesta aula", "hoje vamos") e síntese no fim da anterior, com peso pequeno; conteúdo (palavras do título, do texto dos `.pptx` de cada aula e das inserções da Skoopia × fala); duração (arquivo curto quase sempre é continuação ou take). `[ERRO]` da Skoopia no fim de um vídeo.
+- As regras antigas (cumprimento, take, final refeito) continuam iguais: os dias que já funcionavam saem iguais (conferido com os testes de 08/10 antes da mudança). Sem cartão, aula sem "Olá" só se separa com duas pistas fortes.
+- Arquivo minúsculo no meio do dia (≤ 30 s, poucas palavras, sem abertura nem fechamento) sai como "trecho curto sem aula"; pausa de 5 min ou mais no meio de um trecho fica marcada para conferir.
 - A aula é sempre definida pelo app (arquivo, fala, títulos). A aba "Aulas" da Skoopia não é usada (ela não exporta e errou o início de uma aula nos testes).
 - Na janela, o **mapa do dia**: cada vídeo é uma faixa pintada pela aula; o editor arrasta o ponto de divisão ou troca a aula de um trecho. Conta que não fecha vira "conferir divisão".
 - Futuro (script do estúdio): botão "Novo take da mesma aula" marca o arquivo como continuação.

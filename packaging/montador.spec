@@ -35,7 +35,7 @@ a = Analysis(
     # os geradores do motor/ não são analisados (são arquivos de dados): o que eles importam vai aqui
     hiddenimports=collect_submodules("montador") + collect_submodules("pypdfium2") + [
         "PIL.Image", "PIL.ImageDraw", "PIL.ImageFont", "PIL.ImageFilter", "html", "difflib", "copy", "json",
-        "urllib.parse", "xml.etree.ElementTree", "unicodedata", "runpy"],
+        "urllib.parse", "xml.etree.ElementTree", "unicodedata", "runpy", "urllib.request", "ssl", "certifi"],
     excludes=["tkinter", "matplotlib", "numpy", "pytest", "IPython", "pptx"],
     noarchive=False,
 )

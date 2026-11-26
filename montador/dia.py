@@ -95,14 +95,20 @@ def ler(caminho: str | Path) -> dict:
             if _PARTE.search(q.stem):
                 continue
             inf = mp4info.info(q) or {}
+            dur, _fonte = mp4info.duracao(q, inf)
             srt_p = q.with_suffix(".srt")
             videos.append({
                 "nome": q.stem, "arquivo": str(q),
-                "duracao": inf.get("duracao") or mp4info.ffprobe(q), "largura": inf.get("largura"), "altura": inf.get("altura"),
+                "duracao": dur, "largura": inf.get("largura"), "altura": inf.get("altura"),
                 "srt": str(srt_p) if srt_p.is_file() else None,
             })
     if not videos:
         avisos.append("Nenhum vídeo na pasta Footage.")
+    sem_dur = [v["nome"] for v in videos if not v["duracao"]]
+    if sem_dur:
+        avisos.append("Não consegui ler a duração de: " + ", ".join(sem_dur)
+                      + ". Sem ela, a transcrição feita no Premiere e a Skoopia do dia inteiro não se dividem sozinhas"
+                      " (importe o XML da sequência master para resolver).")
 
     unico, tabela = None, []
     for base in {footage, raiz}:
@@ -112,7 +118,7 @@ def ler(caminho: str | Path) -> dict:
         if t.is_file():
             tabela = _tabela(t)
 
-    master = False
+    master, candidato_master = False, None
     sem_transcricao = [v["nome"] for v in videos if not v["srt"]]
     if sem_transcricao and not unico:
         # transcrição master do Premiere (todos os vídeos colados numa sequência), solta na Footage ou na pasta do dia
@@ -129,8 +135,15 @@ def ler(caminho: str | Path) -> dict:
                     unico, tabela, master = str(q), tabela_colada(videos), True
                     avisos.append(f"Transcrição master ({q.name}): vídeos colados, divididos pela duração de cada um.")
                     break
+                if not candidato_master and _parece_sequencia(cues, videos):
+                    candidato_master = str(q)
             if master:
                 break
+        if candidato_master and not master:
+            sem = [v["nome"] for v in videos if not v.get("duracao")]
+            avisos.append(f"{Path(candidato_master).name} parece a transcrição da sequência master do Premiere, mas "
+                          + ("falta a duração de " + ", ".join(sem) if sem else "a soma das durações não fecha com ela")
+                          + ". Marque “Transcrição feita no Premiere” ou importe o XML da sequência.")
     if sem_transcricao and not unico:
         avisos.append("Sem transcrição: " + ", ".join(sem_transcricao) + ". Rode o transcribe na pasta.")
 
@@ -155,6 +168,7 @@ def ler(caminho: str | Path) -> dict:
         "footage": str(footage), "originais": str(originais) if originais else None,
         "projeto": str(projeto) if projeto else None, "editado": bool(projeto or saida),
         "videos": videos, "srt_unico": unico, "tabela": tabela, "master": master,
+        "candidato_master": candidato_master,
         "material": material, "cartao": cart, "avisos": avisos,
     }
 
@@ -183,6 +197,13 @@ def tabela_colada(videos: list[dict]) -> list[dict] | None:
         out.append({"video": v["nome"], "separador": ini, "fala": ini})
         ini += float(v["duracao"])
     return out
+
+
+def _parece_sequencia(cues: list[srt.Cue], videos: list[dict]) -> bool:
+    """Sem separadores e passando do fim do vídeo mais longo que tem duração: transcrição de uma sequência."""
+    if not cues or srt.separadores(cues) or len(videos) < 2:
+        return False
+    return max(c.fim for c in cues) > max((v.get("duracao") or 0 for v in videos), default=0) + 5
 
 
 def eh_master(cues: list[srt.Cue], videos: list[dict]) -> bool:

@@ -83,6 +83,7 @@ function renderConfig() {
   }
   $("cfgMarcacoes").value = config.marcacoes;
   $("cfgDurSlide").value = config.duracao_slide || 15;
+  $("cfgTestes").checked = !!config.atualizar_testes;
   $("cfgLibre").textContent = S.estado.libreoffice ? `LibreOffice: ${S.estado.libreoffice}`
     : S.estado.keynote ? "LibreOffice não encontrado — os slides serão convertidos pelo Keynote"
     : "LibreOffice não encontrado — instale (libreoffice.org) para converter os slides";
@@ -124,12 +125,16 @@ function mostrarDia(r) {
   $("pilulasDia").innerHTML = [
     pilula(`${d.videos.length} vídeo(s)`, d.videos.length ? "ok" : "alerta"),
     nTrans >= d.videos.length ? pilula(`${nTrans} transcrição(ões)`) : pilula(`faltam ${d.videos.length - nTrans} transcrição(ões)`, "alerta"),
-    d.srt_unico ? pilula("SRT único") : "",
+    d.srt_unico ? pilula(d.master ? "transcrição master" : "SRT único") : "",
+    d.xml_master ? pilula("XML: " + d.xml_master) : "",
+    (d.videos || []).some((v) => !v.duracao) ? pilula(`${d.videos.filter((v) => !v.duracao).length} vídeo(s) sem duração`, "alerta") : "",
     c ? pilula("cartão") : pilula("sem cartão", "alerta"),
     d.editado ? pilula("já tem Projeto/Saída", "alerta") : "",
   ].join(" ");
   $("avisosDia").innerHTML = d.avisos.map((a) => `<div class="aviso">${esc(a)}</div>`).join("");
   $("importarTrans").classList.remove("hidden");
+  $("caixaPremiere").classList.toggle("hidden", d.videos.length < 2);
+  $("premiere").checked = !!d.premiere;
 
   ["caixaCartao", "caixaFormato", "caixaSkoopia", "caixaMaterial", "caixaMapa", "rodape"].forEach((id) => $(id).classList.remove("hidden"));
   $("resumoCartao").innerHTML = c ? `
@@ -211,7 +216,7 @@ function mostrarMapa(m) {
       const curto = (larguraBarra * larg) / 100 < 12;
       const rot = desc ? (curto ? "✕" : "descartado") : (curto ? `${f.aula}` : `aula ${f.aula}`);
       return `<div class="trecho ${desc ? "descartado" : ""} ${f.motivo ? "conferir" : ""}" data-i="${f.i}"
-        style="width:${larg}%;${desc ? "" : `background:${corAula(f.aula)}`}" title="${esc(`${desc ? "descartado" : "aula " + f.aula} · ${mmss(f.ini)}–${mmss(f.fim)}${f.motivo ? " · " + f.motivo : ""}`)}">${esc(rot)}</div>`;
+        style="width:${larg}%;${desc ? "" : `background:${corAula(f.aula)}`}" title="${esc(`${desc ? "descartado" : "aula " + f.aula} · ${mmss(f.ini)}–${mmss(f.fim)}${f.motivo ? " · " + f.motivo : f.pista ? " · " + f.pista : ""}`)}">${esc(rot)}</div>`;
     }).join("");
     return `<div class="video"><div class="nome" title="${esc(nome)}">${esc(nome)}</div>
       <div class="trilho"><div class="barra" style="width:${larguraBarra}%">${partes}</div><span class="dur">${mmss(total)}</span></div></div>`;
@@ -219,12 +224,21 @@ function mostrarMapa(m) {
   $("mapa").innerHTML = html;
   $("mapa").querySelectorAll(".trecho").forEach((el) => (el.onclick = () => abrirTrecho(+el.dataset.i)));
   $("avisosMapa").innerHTML = m.avisos.map((a) => `<div class="aviso">${esc(a)}</div>`).join("");
+  const opTrechos = m.faixas.map((f, i) => `<option value="${i}">${esc(f.video)} · ${mmss(f.ini)}–${mmss(f.fim)}${
+    f.aula === 0 ? " (descartado)" : f.aula ? ` (hoje na aula ${f.aula})` : ""}</option>`).join("");
   $("aulas").innerHTML = `<div class="aulas-lista">${m.aulas.map((a) => `
-    <div class="aula"><span class="cor" style="background:${corAula(a.n)}"></span><span class="num">${String(a.n).padStart(2, "0")}</span>
+    <div class="aula ${a.nao_reconhecida ? "nao-rec" : ""}"><span class="cor" style="background:${a.nao_reconhecida ? "transparent" : corAula(a.n)}"></span><span class="num">${String(a.n).padStart(2, "0")}</span>
       <input class="campo" data-t="${a.n - 1}" value="${esc(a.titulo)}" placeholder="Título da aula ${a.n}">
-      ${a.marcas && (a.marcas.erro + a.marcas.bastidores + a.marcas.insercao) ? `<span class="marcas">Skoopia: ${a.marcas.erro} erro(s) · ${a.marcas.bastidores} bastidores · ${a.marcas.insercao} inserção(ões)</span>` : ""}
-      ${a.conferir.map((x) => `<span class="motivo">${esc(x)}</span>`).join("")}</div>`).join("")}</div>`;
+      ${a.nao_reconhecida ? `<span class="escolher">aula não reconhecida — escolha o trecho:
+        <select class="campo" data-escolher="${a.n}"><option value="">escolher…</option>${opTrechos}</select></span>`
+        : a.conferir.map((x) => `<span class="motivo">${esc(x)}</span>`).join("")}
+      ${a.marcas && (a.marcas.erro + a.marcas.bastidores + a.marcas.insercao) ? `<span class="marcas">Skoopia: ${a.marcas.erro} erro(s) · ${a.marcas.bastidores} bastidores · ${a.marcas.insercao} inserção(ões)</span>` : ""}</div>`).join("")}</div>`;
   $("aulas").querySelectorAll("[data-t]").forEach((el) => (el.onchange = () => { S.titulos[+el.dataset.t] = el.value.trim(); }));
+  $("aulas").querySelectorAll("[data-escolher]").forEach((sel) => (sel.onchange = () => {
+    if (sel.value === "") return;
+    S.faixas[+sel.value].aula = +sel.dataset.escolher; S.faixas[+sel.value].motivo = "escolhido pelo editor";
+    refazerMapa();
+  }));
 }
 
 function abrirTrecho(i) {
@@ -257,8 +271,16 @@ async function importarTranscricoes(corpo) {
     const i = r.importacao, partes = [];
     if (i.videos.length) partes.push(`${i.videos.length} transcrição(ões) ligadas aos vídeos${i.unico ? (i.master ? " (pela transcrição master: vídeos colados)" : " (pelo SRT único)") : ""}`);
     if (i.skoopia.length) partes.push(`${i.skoopia.length} SRT(s) da Skoopia: entram na etapa 2`);
+    if (i.master && i.explicacao) partes.push(`transcrição master: ${i.explicacao}`);
+    if (i.xml) partes.push(`XML da sequência "${i.xml.sequencia}": ${i.xml.n} clipe(s)${i.xml.faltam.length ? ` — fora da sequência: ${i.xml.faltam.join(", ")}` : ""}`);
     if (i.ignorados.length) partes.push(`não reconheci: ${i.ignorados.slice(0, 4).join(", ")}${i.ignorados.length > 4 ? "…" : ""}`);
-    toast(partes.join(" · ") || "Nenhuma transcrição reconhecida.", 7000);
+    const motivos = Object.entries(i.motivos || {}).map(([n, m]) => `${n}: ${m}`);
+    if (motivos.length) partes.push(motivos.slice(0, 2).join(" · "));
+    if (!partes.length && "premiere" in corpo) {
+      toast(corpo.premiere ? "Marcado: a transcrição sem nome de vídeo é dividida pela duração de cada vídeo." : "Desmarcado.");
+      return;
+    }
+    toast(partes.join(" · ") || "Nenhuma transcrição reconhecida.", 9000);
   } catch (e) { toast(e.message); }
 }
 
@@ -279,7 +301,8 @@ function abrirMontar() {
   const nSk = (S.dia.skoopia || []).length, modo = S.estado.config.marcacoes;
   const fonte = modo === "regras" || (modo === "auto" && !nSk) ? "regras do Fluxo NPD (sem IA)" : "Skoopia";
   const fmt = $("formato").value === "SCREENCAST" ? "Screencast" : $("formato").value;
-  $("montarResumo").textContent = `${S.aulas.length} aula(s) · formato ${fmt} · marcações: ${fonte}. Um XML por aula.`
+  const nRec = S.aulas.filter((a) => a.trechos.length).length, nFalta = S.aulas.length - nRec;
+  $("montarResumo").textContent = `${nRec} aula(s)${nFalta ? ` (${nFalta} não reconhecida(s) ficam de fora)` : ""} · formato ${fmt} · marcações: ${fonte}. Um XML por aula.`
     + ($("formato").value === "TP" ? " Os slides entram na próxima versão (etapa 3)." : "");
   $("montarAntes").classList.remove("hidden"); $("montarDepois").classList.add("hidden");
   $("montarJuntar").checked = S.estado.config.juntar_xml !== false;
@@ -317,7 +340,7 @@ async function montarAgora() {
 
 async function iniciar() {
   S.estado = await api("/api/estado");
-  $("versao").textContent = S.estado.versao;
+  $("versao").textContent = S.estado.versao + (S.estado.build ? ` · ${S.estado.build.replace("montagem-", "montagem ")} (teste)` : "");
   renderConfig();
   if (S.estado.config.ultima_pasta) $("caminhoDia").placeholder = S.estado.config.ultima_pasta;
 
@@ -340,13 +363,15 @@ async function iniciar() {
     const p = await escolher("pasta", "Pasta com as transcrições (.srt)", S.estado.config.pasta_transcricoes || S.dia?.raiz);
     if (p) importarTranscricoes({ pasta: p });
   };
+  $("premiere").onchange = () => importarTranscricoes({ premiere: $("premiere").checked });
+  $("arqXml").onchange = async (e) => { if (e.target.files.length) importarTranscricoes({ arquivos: await lerArquivos(e.target.files) }); e.target.value = ""; };
   const caixa = $("caixaDia");
   caixa.ondragover = (e) => { e.preventDefault(); caixa.classList.add("soltando"); };
   caixa.ondragleave = () => caixa.classList.remove("soltando");
   caixa.ondrop = async (e) => {
     e.preventDefault(); caixa.classList.remove("soltando");
     if (!S.dia) { toast("Escolha a pasta do dia primeiro."); return; }
-    const fs = [...e.dataTransfer.files].filter((f) => /\.(srt|txt)$/i.test(f.name));
+    const fs = [...e.dataTransfer.files].filter((f) => /\.(srt|txt|xml)$/i.test(f.name));
     if (fs.length) importarTranscricoes({ arquivos: await lerArquivos(fs) });
   };
   $("arqSkoopia").onchange = async (e) => { if (e.target.files.length) enviarSkoopia({ arquivos: await lerArquivos(e.target.files) }); e.target.value = ""; };
@@ -395,7 +420,41 @@ async function iniciar() {
   $("montarTrocar").onclick = async () => { const p = await escolher("pasta", "Onde salvar os XMLs", $("montarDestino").value); if (p) $("montarDestino").value = p; };
   $("montarIr").onclick = montarAgora;
 
+  $("cfgTestes").onchange = async () => { await salvarConfig({ atualizar_testes: $("cfgTestes").checked }); verAtualizacao(true); };
+  $("atualizarBaixar").onclick = () => atualizarApp("baixar");
+  $("atualizarIr").onclick = () => atualizarApp("instalar");
+  verAtualizacao();
+
   setInterval(() => fetch("/api/ping", { method: "POST" }).catch(() => {}), 20000);
+}
+
+// ------------------------------------------------------------------ atualizar pelo GitHub
+
+async function verAtualizacao(forcar = false) {
+  try {
+    const r = await api("/api/atualizacao", { forcar });
+    $("atualizar").classList.toggle("hidden", !r.tem);
+    if (!r.tem) return;
+    $("atualizarTexto").textContent = `${r.versao} disponível`;
+    $("atualizarIr").classList.toggle("hidden", !r.automatico);
+  } catch (e) { /* sem internet: segue sem o aviso */ }
+}
+
+async function atualizarApp(modo) {
+  const b = modo === "instalar" ? $("atualizarIr") : $("atualizarBaixar"), txt = b.textContent;
+  b.textContent = "Baixando…"; b.disabled = true;
+  try {
+    const r = await api("/api/atualizar", { modo });
+    if (modo === "baixar") {
+      toast(`Baixado: ${r.arquivo.split(/[\\/]/).pop()} (na pasta Downloads, que abriu agora). Troque o app como antes.`, 12000);
+    } else {
+      document.querySelector("main").innerHTML = `<section class="caixa" style="margin:40px auto;max-width:560px">
+        <div class="rotulo">Atualizando o Montador</div>
+        <p>O app vai fechar, trocar pela versão nova e abrir de novo numa janela nova. Pode fechar esta aba.</p>
+        ${r.aviso ? `<div class="aviso">${esc(r.aviso)}</div>` : ""}</section>`;
+    }
+  } catch (e) { toast(e.message, 12000); }
+  b.textContent = txt; b.disabled = false;
 }
 
 iniciar().catch((e) => toast(e.message));
