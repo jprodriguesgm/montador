@@ -32,7 +32,7 @@ _FECHA = re.compile(r"(vejo (voce|voces|vcs)|nos vemos|ate a proxima|ate logo|at
 _ABRE_AULA = re.compile(r"\b(neste video|nesse video|nesta aula|nessa aula|neste (modulo|topico|bloco|tema)|"
                         r"nesta (unidade|parte|etapa)|hoje (vamos|eu vou|a gente vai)|"
                         r"vamos (comecar|iniciar) (a|nossa|esta|essa)|nesta videoaula|nessa videoaula)\b")
-_SINTESE = re.compile(r"\b(em sintese|sintetizando|resumindo|recapitulando|para (finalizar|concluir|encerrar)|"
+_SINTESE = re.compile(r"\b(em sintese|sintetizando|resumindo|recapitulando|recapitular|para (finalizar|concluir|encerrar)|"
                       r"concluindo|chegamos ao (fim|final)|finalizamos|na proxima aula|no proximo (video|tema))\b")
 _CONTINUA = re.compile(r"^(entao|continuando|retomando|voltando|como eu (estava|dizia)|bom,? continuando)\b")
 TESTE_MAX_S = 90.0          # gravação curta e quase sem fala no começo do dia: teste de vídeo e microfone
@@ -234,6 +234,15 @@ def sugerir(videos: list[dict], falas: dict[str, list[Cue]], titulos: list[str],
             out.append((nota, sem, dur, a[0]))
         return sorted(out, reverse=True)
 
+    # começo falso: arquivo curto cujo começo se repete no arquivo seguinte ("Neste vídeo…" — para — recomeça)
+    for i, f in enumerate(fx):
+        if f["aula"] == 0 or f["ini"] > 0 or f["fim"] - f["ini"] >= TAKE_CURTO_S:
+            continue
+        prox = next((g for g in fx[i + 1:] if g["aula"] != 0 and g["ini"] == 0), None)
+        if prox and _semelhanca(f.get("_cues", []), prox.get("_cues", [])[:15]) >= 0.5 \
+                and not any(_fechamento(c) for c in f.get("_cues", [])):
+            f["aula"] = 0
+            f["motivo"] = "começo de aula que se repete no vídeo seguinte (take descartado)"
     bl = blocos()
     for nota, sem, dur, i in candidatos(bl):          # sem cartão: só os casos claros
         if sem >= 0.35 and dur < TAKE_CURTO_S:
@@ -326,10 +335,12 @@ def _melhor_promocao(fx: list[dict], bl: list[list[int]], assin: list[dict], ins
             if any(_fechamento(c) for c in ant[-4:]):
                 nota += 2.0
                 pistas.append("o vídeo anterior fecha a aula")
-            if any(_SINTESE.search(_norm(c.texto)) for c in ant[-8:]):
+            fim_ant = ant[-1].fim if ant else 0
+            if any(_SINTESE.search(_norm(c.texto)) for c in ant if c.ini >= fim_ant - 180):   # últimos 3 min
                 nota += 1.0
                 pistas.append("síntese no fim do anterior")
-            if any(_ABRE_AULA.search(_norm(c.texto)) for c in cues[:3]):
+            inicio = [c for c in cues if c.ini - f["ini"] <= 60][:15]     # 1º minuto (antes pode vir bastidor)
+            if any(_ABRE_AULA.search(_norm(c.texto)) for c in inicio):
                 nota += 1.0
                 pistas.append("abre a aula (\"neste vídeo\"/\"nesta aula\")")
             if dur >= TAKE_CURTO_S:

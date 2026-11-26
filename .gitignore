@@ -7,3 +7,6 @@ dist/
 
 bin/
 fontes/
+
+# dados reais de gravação (transcrição de professor): não vão para o GitHub público
+tests/dados/dia_*/
